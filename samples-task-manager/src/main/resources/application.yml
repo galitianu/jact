@@ -1,0 +1,10 @@
+spring:
+  main:
+    web-application-type: none
+
+jact:
+  enabled: true
+  initial-page: "/"
+  window-title: "JACT M1 Sample"
+  window-width: 960
+  window-height: 640
