@@ -14,6 +14,8 @@ Core decisions:
 
 ## Milestone Timeline (12 Weeks)
 ### M1: Foundations (March 16, 2026 to April 5, 2026)
+Detailed plan: [milestones/m1-foundations-plan.md](./milestones/m1-foundations-plan.md)
+
 Deliverables:
 - Gradle multi-module setup with initial modules:
   - `jact-annotations`
@@ -31,6 +33,8 @@ Acceptance criteria:
 - A minimal page can be mounted via Spring + JavaFX startup.
 
 ### M2: Runtime and Routing Core (April 6, 2026 to April 26, 2026)
+Detailed plan: [milestones/m2-runtime-routing-plan.md](./milestones/m2-runtime-routing-plan.md)
+
 Deliverables:
 - Hook runtime: `useState`, `useEffect`, `useMemo`.
 - Retained node graph with direct JavaFX property/event bindings.
@@ -43,6 +47,8 @@ Acceptance criteria:
 - Compiler diagnostics are available for invalid annotated method signatures and duplicate routes.
 
 ### M3: Integration and Validation App (April 27, 2026 to May 17, 2026)
+Detailed plan: [milestones/m3-integration-validation-plan.md](./milestones/m3-integration-validation-plan.md)
+
 Deliverables:
 - Spring Boot starter auto-configuration and runtime integration.
 - Optional global store API integrated with hooks.
@@ -58,6 +64,8 @@ Acceptance criteria:
 - v1 API surface is frozen at milestone end.
 
 ### M4: Stabilization and Thesis Packaging (May 18, 2026 to June 16, 2026)
+Detailed plan: [milestones/m4-stabilization-thesis-plan.md](./milestones/m4-stabilization-thesis-plan.md)
+
 Deliverables:
 - Stabilization phase with bug fixing and API/documentation hardening.
 - Final 2-week buffer (June 2, 2026 to June 16, 2026) reserved for risk, regressions, and polish.
