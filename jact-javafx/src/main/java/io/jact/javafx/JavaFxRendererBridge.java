@@ -6,14 +6,16 @@ import io.jact.core.RendererBridge;
 import io.jact.core.WindowSettings;
 import io.jact.core.node.ContainerNode;
 import io.jact.core.node.TextNode;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
-import javafx.scene.layout.VBox;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class JavaFxRendererBridge implements RendererBridge {
     private final AtomicBoolean started = new AtomicBoolean(false);
@@ -69,13 +71,13 @@ public final class JavaFxRendererBridge implements RendererBridge {
     }
 
     private javafx.scene.Node toFxNode(JNode node) {
-        if (node instanceof TextNode textNode) {
-            return new Label(textNode.value());
+        if (node instanceof TextNode(String value)) {
+            return new Label(value);
         }
 
-        if (node instanceof ContainerNode containerNode) {
+        if (node instanceof ContainerNode(List<JNode> children)) {
             VBox vBox = new VBox(8);
-            for (JNode child : containerNode.children()) {
+            for (JNode child : children) {
                 vBox.getChildren().add(toFxNode(child));
             }
             return vBox;

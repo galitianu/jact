@@ -1,17 +1,9 @@
 package io.jact.spring.boot;
 
 import io.jact.annotations.JNode;
-import io.jact.core.GeneratedRuntimeRegistry;
-import io.jact.core.JactRuntime;
-import io.jact.core.JactRuntimeException;
-import io.jact.core.PageResolver;
-import io.jact.core.RendererBridge;
-import io.jact.core.RuntimeRegistry;
-import io.jact.core.WindowSettings;
+import io.jact.core.*;
 import io.jact.core.descriptor.PageDescriptor;
 import io.jact.javafx.JavaFxRendererBridge;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -19,6 +11,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 
 @AutoConfiguration
 @EnableConfigurationProperties(JactProperties.class)

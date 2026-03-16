@@ -1,12 +1,13 @@
 package io.jact.compiler;
 
-import static com.google.testing.compile.CompilationSubject.assertThat;
-import static com.google.testing.compile.JavaFileObjects.forSourceString;
-
 import com.google.testing.compile.Compilation;
 import com.google.testing.compile.Compiler;
-import javax.tools.JavaFileObject;
 import org.junit.jupiter.api.Test;
+
+import javax.tools.JavaFileObject;
+
+import static com.google.testing.compile.CompilationSubject.assertThat;
+import static com.google.testing.compile.JavaFileObjects.forSourceString;
 
 class JactAnnotationProcessorTest {
     @Test

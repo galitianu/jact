@@ -1,16 +1,16 @@
 package io.jact.spring.boot;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+import io.jact.annotations.JNode;
 import io.jact.core.JactRuntime;
 import io.jact.core.RendererBridge;
 import io.jact.core.RuntimeRegistry;
 import io.jact.core.WindowSettings;
-import io.jact.annotations.JNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class JactAutoConfigurationTest {
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()

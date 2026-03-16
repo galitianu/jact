@@ -2,6 +2,7 @@ package io.jact.core;
 
 import io.jact.core.descriptor.ComponentDescriptor;
 import io.jact.core.descriptor.PageDescriptor;
+
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;

@@ -1,14 +1,15 @@
 package io.jact.core;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import io.jact.annotations.JNode;
 import io.jact.core.descriptor.PageDescriptor;
 import io.jact.core.node.Nodes;
+import org.junit.jupiter.api.Test;
+
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class JactRuntimeTest {
     @Test

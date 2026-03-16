@@ -1,6 +1,7 @@
 package io.jact.core.node;
 
 import io.jact.annotations.JNode;
+
 import java.util.Arrays;
 
 public final class Nodes {

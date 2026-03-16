@@ -52,6 +52,7 @@ Detailed plan: [milestones/m3-integration-validation-plan.md](./milestones/m3-in
 Deliverables:
 - Spring Boot starter auto-configuration and runtime integration.
 - Optional global store API integrated with hooks.
+- Reactive service-state bridge so independently-changing Spring service values can trigger UI updates automatically.
 - `samples-task-manager` reference app with:
   - task list and detail pages,
   - create/edit/delete flows,
@@ -61,6 +62,7 @@ Deliverables:
 Acceptance criteria:
 - End-to-end flows run through JACT runtime, router, and Spring integration.
 - Integration test suite covers render lifecycle, event-to-state updates, and navigation.
+- A UI component subscribed to independently-changing service state updates automatically without manual refresh.
 - v1 API surface is frozen at milestone end.
 
 ### M4: Stabilization and Thesis Packaging (May 18, 2026 to June 16, 2026)
@@ -115,6 +117,7 @@ Acceptance criteria:
   - setup after render commit,
   - cleanup before re-run/unmount.
 - Add optional global store integration (`Store<T>`) with selector/subscription support and hook bridge APIs.
+- Add service-state subscription bridge APIs so external state sources can notify the runtime and trigger re-render paths.
 
 5. JavaFX renderer and update pipeline (`jact-javafx`)
 - Maintain a retained UI representation linked to JavaFX nodes.
@@ -137,6 +140,7 @@ Acceptance criteria:
   - JACT runtime initialization,
   - JavaFX stage creation and root page mount.
 - Support dependency injection into component/page bean methods through standard Spring lifecycle.
+- Provide integration helpers for Spring-managed services that publish independent state updates.
 - Provide configurable startup properties (`JactProperties`): pages package roots, initial route, and window settings.
 
 8. Validation app and implementation evidence
@@ -149,7 +153,7 @@ Acceptance criteria:
 - Annotations: `@JactComponent`, `@JactPage`.
 - Core types: `JNode`, `HookContext`, `State<T>`.
 - Routing: `Navigator`, `RouteTemplate`, `RouteParams`.
-- Optional store: `Store<T>`, selectors/subscriptions, hook integration utilities.
+- Optional store: `Store<T>`, selectors/subscriptions, hook integration utilities, and external service subscription adapters.
 - Spring starter configuration: `JactProperties` (pages root package, initial route, window settings).
 
 ## Test Plan
@@ -167,6 +171,7 @@ Acceptance criteria:
 - Mount/unmount lifecycle correctness.
 - Event -> state -> UI update cycle.
 - Dynamic route substitution and parameter access.
+- External service update -> subscribed component re-render cycle.
 
 4. End-to-end sample tests
 - Task Manager CRUD and navigation flows.
