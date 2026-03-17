@@ -7,6 +7,7 @@ import io.jact.core.WindowSettings;
 import io.jact.core.node.ContainerNode;
 import io.jact.core.node.TextNode;
 import javafx.application.Platform;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
 import javafx.scene.layout.StackPane;
@@ -70,7 +71,7 @@ public final class JavaFxRendererBridge implements RendererBridge {
         }
     }
 
-    private javafx.scene.Node toFxNode(JNode node) {
+    private Node toFxNode(JNode node) {
         if (node instanceof TextNode(String value)) {
             return new Label(value);
         }

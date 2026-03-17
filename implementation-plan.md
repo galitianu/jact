@@ -36,15 +36,18 @@ Acceptance criteria:
 Detailed plan: [milestones/m2-runtime-routing-plan.md](./milestones/m2-runtime-routing-plan.md)
 
 Deliverables:
-- Hook runtime: `useState`, `useEffect`, `useMemo`.
-- Retained node graph with direct JavaFX property/event bindings.
-- File/package-based route derivation with `$param` support.
-- Navigation API with parameter extraction and path substitution.
+- Static hook runtime API: `Hooks.useState`, `Hooks.useEffect`, `Hooks.useMemo`.
+- `State<T>` handle semantics with batched subtree re-render scheduling.
+- Update-capable JavaFX renderer path for targeted subtree patching.
+- Convention-based route derivation with `$param` support from Java source naming.
+- Navigation API with `push`, `replace`, `back`, and string param extraction.
 
 Acceptance criteria:
-- State changes update only affected UI regions.
+- State changes update only affected component subtree UI regions.
+- Hook semantics are validated for dependency-based effects and memoization behavior.
 - Route templates resolve correctly (example: `/users/$id` with `id=42` resolves to `/users/42`).
 - Compiler diagnostics are available for invalid annotated method signatures and duplicate routes.
+- Independently-changing Spring service state subscriptions remain deferred to M3.
 
 ### M3: Integration and Validation App (April 27, 2026 to May 17, 2026)
 Detailed plan: [milestones/m3-integration-validation-plan.md](./milestones/m3-integration-validation-plan.md)
@@ -111,6 +114,7 @@ Acceptance criteria:
 
 4. Reactive runtime internals (`jact-core`)
 - Implement hook primitives for local state and side effects: `useState`, `useEffect`, `useMemo`.
+- Expose hooks through static `Hooks.*` API (no required hook context method parameter).
 - Preserve hook call-order stability per component render identity.
 - Introduce a scheduler that batches state changes and dispatches render/update tasks on UI-safe execution context.
 - Provide effect lifecycle guarantees:
@@ -128,9 +132,9 @@ Acceptance criteria:
 
 6. Routing model and navigation behavior
 - Derive route templates from package/class naming conventions.
-- Represent dynamic segments with `$param` syntax in templates (example: `/users/$id`).
+- Represent dynamic segments with `$param` syntax in templates (example: `/users/$id`) derived from Java names.
 - Provide runtime substitution to concrete paths (example: template `/users/$id` + `id=42` -> `/users/42`).
-- Expose parameter extraction/parsing and typed access helpers through routing APIs.
+- Expose parameter extraction as string params in M2 (typed conversion deferred).
 - Implement navigation service with push/replace/back-forward semantics and route transition lifecycle hooks.
 
 7. Spring Boot integration (`jact-spring-boot-starter`)
@@ -151,8 +155,8 @@ Acceptance criteria:
 
 ## Public APIs / Interfaces
 - Annotations: `@JactComponent`, `@JactPage`.
-- Core types: `JNode`, `HookContext`, `State<T>`.
-- Routing: `Navigator`, `RouteTemplate`, `RouteParams`.
+- Core types: `JNode`, `Hooks`, `State<T>`.
+- Routing: `Navigator` (`push`, `replace`, `back`), `RouteTemplate`, `RouteParams`.
 - Optional store: `Store<T>`, selectors/subscriptions, hook integration utilities, and external service subscription adapters.
 - Spring starter configuration: `JactProperties` (pages root package, initial route, window settings).
 
