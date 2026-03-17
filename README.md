@@ -53,6 +53,11 @@ Target planning window: **March 16, 2026 - June 16, 2026**
 This project is also the practical foundation for my master thesis.
 The thesis will document architecture decisions, implementation, and comparative evaluation against a JavaFX MVC + FXML baseline.
 
+## License
+
+Licensed under the Apache License, Version 2.0.  
+See [LICENSE](./LICENSE).
+
 ## Contributing
 
 As implementation starts, contribution guidelines and issue templates will be added.
