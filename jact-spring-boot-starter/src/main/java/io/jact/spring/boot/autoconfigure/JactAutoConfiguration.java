@@ -13,6 +13,7 @@ import io.jact.core.runtime.spi.PageResolver;
 import io.jact.core.runtime.spi.RendererBridge;
 import io.jact.javafx.renderer.JavaFxRendererBridge;
 import io.jact.spring.boot.properties.JactProperties;
+import org.springframework.beans.BeansException;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -78,7 +79,7 @@ public class JactAutoConfiguration {
             Class<?> beanClass = Class.forName(request.descriptor().beanClassName());
             Object bean = applicationContext.getBean(beanClass);
             Method method = resolvePageMethod(beanClass, request.descriptor().methodName());
-            Object[] args = resolveMethodArguments(method, request);
+            Object[] args = resolveMethodArguments(applicationContext, method, request);
             Object result = method.invoke(bean, args);
 
             if (!(result instanceof JNode node)) {
@@ -87,7 +88,7 @@ public class JactAutoConfiguration {
                 );
             }
             return node;
-        } catch (ClassNotFoundException | IllegalAccessException | InvocationTargetException exception) {
+        } catch (ClassNotFoundException | IllegalAccessException | InvocationTargetException | BeansException exception) {
             throw new JactRuntimeException(
                 "Failed to invoke page: " + request.descriptor().beanClassName() + "#" + request.descriptor().methodName(),
                 exception
@@ -102,7 +103,7 @@ public class JactAutoConfiguration {
             .orElseThrow(() -> new JactRuntimeException("No matching page method found: " + beanClass.getName() + "#" + methodName));
     }
 
-    private Object[] resolveMethodArguments(Method method, RenderRequest request) {
+    private Object[] resolveMethodArguments(ApplicationContext applicationContext, Method method, RenderRequest request) {
         Class<?>[] parameterTypes = method.getParameterTypes();
         Object[] args = new Object[parameterTypes.length];
 
@@ -113,9 +114,7 @@ public class JactAutoConfiguration {
             } else if (Navigator.class.equals(parameterType)) {
                 args[i] = request.navigator();
             } else {
-                throw new JactRuntimeException(
-                    "Unsupported page method parameter type: " + parameterType.getName() + " in " + method.getDeclaringClass().getName() + "#" + method.getName()
-                );
+                args[i] = applicationContext.getBean(parameterType);
             }
         }
 

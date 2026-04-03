@@ -54,9 +54,9 @@ Detailed plan: [milestones/m3-integration-validation-plan.md](./milestones/m3-in
 
 Deliverables:
 - Spring Boot starter auto-configuration and runtime integration.
-- Optional global store API integrated with hooks.
+- Global store API integrated with hooks.
 - Reactive service-state bridge so independently-changing Spring service values can trigger UI updates automatically.
-- `samples-task-manager` reference app with:
+- `samples-task-manager` database-backed reference app with:
   - task list and detail pages,
   - create/edit/delete flows,
   - filtering/search,
@@ -65,6 +65,7 @@ Deliverables:
 Acceptance criteria:
 - End-to-end flows run through JACT runtime, router, and Spring integration.
 - Integration test suite covers render lifecycle, event-to-state updates, and navigation.
+- Store selector subscriptions rerender only when selected values change.
 - A UI component subscribed to independently-changing service state updates automatically without manual refresh.
 - v1 API surface is frozen at milestone end.
 
@@ -157,7 +158,7 @@ Acceptance criteria:
 - Annotations: `@JactComponent`, `@JactPage`.
 - Core types: `JNode`, `Hooks`, `State<T>`.
 - Routing: `Navigator` (`push`, `replace`, `back`), `RouteTemplate`, `RouteParams`.
-- Optional store: `Store<T>`, selectors/subscriptions, hook integration utilities, and external service subscription adapters.
+- Store/observable: `Store<T>`, `SimpleStore<T>`, `ObservableValue<T>`, `Subscription`, selectors/subscriptions, hook integration utilities, and external service subscription adapters.
 - Spring starter configuration: `JactProperties` (pages root package, initial route, window settings).
 
 ## Test Plan

@@ -3,6 +3,7 @@ package io.jact.core.api;
 import io.jact.core.internal.JactRuntimeException;
 import io.jact.core.routing.RouteParams;
 
+import java.util.function.Function;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -32,6 +33,22 @@ public final class Hooks {
     public static void useEffect(Effect effect, Object... deps) {
         Objects.requireNonNull(effect, "effect");
         requireContext().useEffect(effect, deps);
+    }
+
+    public static <T> T useStore(Store<T> store) {
+        Objects.requireNonNull(store, "store");
+        return requireContext().useStore(store);
+    }
+
+    public static <T, R> R useStore(Store<T> store, Function<T, R> selector) {
+        Objects.requireNonNull(store, "store");
+        Objects.requireNonNull(selector, "selector");
+        return requireContext().useStore(store, selector);
+    }
+
+    public static <T> T useExternal(ObservableValue<T> source) {
+        Objects.requireNonNull(source, "source");
+        return requireContext().useExternal(source);
     }
 
     public static RouteParams routeParams() {
@@ -76,6 +93,12 @@ public final class Hooks {
         <T> T useMemo(Supplier<T> supplier, Object... deps);
 
         void useEffect(Effect effect, Object... deps);
+
+        <T> T useStore(Store<T> store);
+
+        <T, R> R useStore(Store<T> store, Function<T, R> selector);
+
+        <T> T useExternal(ObservableValue<T> source);
 
         RouteParams routeParams();
 

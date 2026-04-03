@@ -2,7 +2,10 @@ package io.jact.core.runtime;
 
 import io.jact.core.api.Hooks;
 import io.jact.core.api.Navigator;
+import io.jact.core.api.ObservableValue;
 import io.jact.core.api.State;
+import io.jact.core.api.Store;
+import io.jact.core.api.Subscription;
 import io.jact.core.internal.JactRuntimeException;
 import io.jact.core.routing.RouteParams;
 
@@ -13,6 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 final class HookRuntime {
@@ -51,6 +55,9 @@ final class HookRuntime {
                     effectSlot.cleanup.run();
                     effectSlot.cleanup = null;
                 }
+                if (slot instanceof SubscriptionSlot subscriptionSlot) {
+                    subscriptionSlot.dispose();
+                }
             }
         }
     }
@@ -67,7 +74,7 @@ final class HookRuntime {
         private final List<HookSlot> slots = new ArrayList<>();
     }
 
-    private sealed interface HookSlot permits StateSlot, MemoSlot, EffectSlot {
+    private interface HookSlot {
     }
 
     private static final class StateSlot<T> implements HookSlot {
@@ -88,6 +95,39 @@ final class HookRuntime {
         private Object[] deps = new Object[0];
         private Hooks.Effect effect;
         private Hooks.Cleanup cleanup;
+        private boolean initialized;
+    }
+
+    private abstract static class SubscriptionSlot implements HookSlot {
+        private Subscription subscription;
+
+        void subscribe(Subscription nextSubscription) {
+            dispose();
+            this.subscription = nextSubscription;
+        }
+
+        void dispose() {
+            if (subscription != null) {
+                subscription.unsubscribe();
+                subscription = null;
+            }
+        }
+
+        boolean hasSubscription() {
+            return subscription != null;
+        }
+    }
+
+    private static final class StoreSlot<T, R> extends SubscriptionSlot {
+        private Store<T> store;
+        private Function<T, R> selector;
+        private Object selectedValue;
+        private boolean initialized;
+    }
+
+    private static final class ExternalSlot<T> extends SubscriptionSlot {
+        private ObservableValue<T> source;
+        private Object value;
         private boolean initialized;
     }
 
@@ -189,6 +229,73 @@ final class HookRuntime {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
+        public <T> T useStore(Store<T> store) {
+            return (T) useStore(store, Function.identity());
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T, R> R useStore(Store<T> store, Function<T, R> selector) {
+            synchronized (componentState) {
+                HookSlot slot = getOrCreateSlot(nextSlotIndex++, StoreSlot::new);
+                if (!(slot instanceof StoreSlot<?, ?> rawStoreSlot)) {
+                    throw new JactRuntimeException("Hook slot mismatch for useStore");
+                }
+
+                StoreSlot<T, R> storeSlot = (StoreSlot<T, R>) rawStoreSlot;
+                if (storeSlot.store != store) {
+                    storeSlot.dispose();
+                    storeSlot.store = store;
+                    storeSlot.initialized = false;
+                }
+                storeSlot.selector = selector;
+
+                R nextSelected = selector.apply(store.get());
+                if (!storeSlot.initialized || !Objects.equals(storeSlot.selectedValue, nextSelected)) {
+                    storeSlot.selectedValue = nextSelected;
+                    storeSlot.initialized = true;
+                }
+
+                if (!storeSlot.hasSubscription() && storeSlot.store != null && storeSlot.selector != null && storeSlotInitializedWithoutSubscription(storeSlot)) {
+                    storeSlot.subscribe(store.subscribe(() -> onStoreChanged(storeSlot)));
+                }
+
+                return (R) storeSlot.selectedValue;
+            }
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> T useExternal(ObservableValue<T> source) {
+            synchronized (componentState) {
+                HookSlot slot = getOrCreateSlot(nextSlotIndex++, ExternalSlot::new);
+                if (!(slot instanceof ExternalSlot<?> rawExternalSlot)) {
+                    throw new JactRuntimeException("Hook slot mismatch for useExternal");
+                }
+
+                ExternalSlot<T> externalSlot = (ExternalSlot<T>) rawExternalSlot;
+                if (externalSlot.source != source) {
+                    externalSlot.dispose();
+                    externalSlot.source = source;
+                    externalSlot.initialized = false;
+                }
+
+                T currentValue = source.get();
+                if (!externalSlot.initialized || !Objects.equals(externalSlot.value, currentValue)) {
+                    externalSlot.value = currentValue;
+                    externalSlot.initialized = true;
+                }
+
+                if (!externalSlot.hasSubscription() && externalSlot.source != null && externalSlotInitializedWithoutSubscription(externalSlot)) {
+                    externalSlot.subscribe(source.subscribe(() -> onExternalChanged(externalSlot)));
+                }
+
+                return (T) externalSlot.value;
+            }
+        }
+
+        @Override
         public RouteParams routeParams() {
             return routeParams;
         }
@@ -212,6 +319,57 @@ final class HookRuntime {
             HookSlot slot = factory.get();
             componentState.slots.add(slot);
             return slot;
+        }
+
+        private boolean storeSlotInitializedWithoutSubscription(StoreSlot<?, ?> storeSlot) {
+            return storeSlot.initialized && storeSlot.selector != null;
+        }
+
+        private boolean externalSlotInitializedWithoutSubscription(ExternalSlot<?> externalSlot) {
+            return externalSlot.initialized;
+        }
+
+        private void onStoreChanged(StoreSlot<?, ?> rawStoreSlot) {
+            boolean shouldSchedule = false;
+            synchronized (componentState) {
+                if (rawStoreSlot.store == null || rawStoreSlot.selector == null) {
+                    return;
+                }
+
+                Object selected = select(rawStoreSlot);
+                if (!Objects.equals(rawStoreSlot.selectedValue, selected)) {
+                    rawStoreSlot.selectedValue = selected;
+                    shouldSchedule = true;
+                }
+            }
+
+            if (shouldSchedule) {
+                scheduleRender.run();
+            }
+        }
+
+        private void onExternalChanged(ExternalSlot<?> externalSlot) {
+            boolean shouldSchedule = false;
+            synchronized (componentState) {
+                if (externalSlot.source == null) {
+                    return;
+                }
+
+                Object nextValue = externalSlot.source.get();
+                if (!Objects.equals(externalSlot.value, nextValue)) {
+                    externalSlot.value = nextValue;
+                    shouldSchedule = true;
+                }
+            }
+
+            if (shouldSchedule) {
+                scheduleRender.run();
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        private <T, R> Object select(StoreSlot<T, R> storeSlot) {
+            return storeSlot.selector.apply(storeSlot.store.get());
         }
     }
 

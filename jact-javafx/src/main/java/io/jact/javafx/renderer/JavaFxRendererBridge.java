@@ -5,6 +5,7 @@ import io.jact.core.internal.JactRuntimeException;
 import io.jact.core.node.ButtonNode;
 import io.jact.core.node.ContainerNode;
 import io.jact.core.node.TextNode;
+import io.jact.core.node.TextInputNode;
 import io.jact.core.runtime.WindowSettings;
 import io.jact.core.runtime.spi.RendererBridge;
 import javafx.application.Platform;
@@ -12,6 +13,7 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -116,6 +118,13 @@ public final class JavaFxRendererBridge implements RendererBridge {
             Button button = new Button(label);
             button.setOnAction(event -> onClick.run());
             return button;
+        }
+
+        if (node instanceof TextInputNode(String value, String placeholder, java.util.function.Consumer<String> onChange)) {
+            TextField textField = new TextField(value);
+            textField.setPromptText(placeholder);
+            textField.textProperty().addListener((observable, oldValue, newValue) -> onChange.accept(newValue));
+            return textField;
         }
 
         if (node instanceof ContainerNode(List<JNode> children)) {
