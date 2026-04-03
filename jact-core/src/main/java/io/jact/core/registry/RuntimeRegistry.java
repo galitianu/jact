@@ -1,7 +1,7 @@
-package io.jact.core;
+package io.jact.core.registry;
 
-import io.jact.core.descriptor.ComponentDescriptor;
-import io.jact.core.descriptor.PageDescriptor;
+import io.jact.core.meta.ComponentDescriptor;
+import io.jact.core.meta.PageDescriptor;
 
 import java.util.List;
 

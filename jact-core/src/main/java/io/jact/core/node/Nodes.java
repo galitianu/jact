@@ -12,6 +12,10 @@ public final class Nodes {
         return new TextNode(value);
     }
 
+    public static ButtonNode button(String label, Runnable onClick) {
+        return new ButtonNode(label, onClick);
+    }
+
     public static ContainerNode column(JNode... children) {
         return new ContainerNode(Arrays.asList(children));
     }

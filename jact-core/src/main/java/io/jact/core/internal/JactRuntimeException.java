@@ -1,4 +1,4 @@
-package io.jact.core;
+package io.jact.core.internal;
 
 public class JactRuntimeException extends RuntimeException {
     public JactRuntimeException(String message) {

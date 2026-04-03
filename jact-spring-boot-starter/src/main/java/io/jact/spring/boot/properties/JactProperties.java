@@ -1,4 +1,4 @@
-package io.jact.spring.boot;
+package io.jact.spring.boot.properties;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

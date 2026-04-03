@@ -1,10 +1,12 @@
 package io.jact.spring.boot;
 
 import io.jact.annotations.JNode;
-import io.jact.core.JactRuntime;
-import io.jact.core.RendererBridge;
-import io.jact.core.RuntimeRegistry;
-import io.jact.core.WindowSettings;
+import io.jact.core.api.Navigator;
+import io.jact.core.registry.RuntimeRegistry;
+import io.jact.core.runtime.JactRuntime;
+import io.jact.core.runtime.WindowSettings;
+import io.jact.core.runtime.spi.RendererBridge;
+import io.jact.spring.boot.autoconfigure.JactAutoConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -35,14 +37,24 @@ class JactAutoConfigurationTest {
                 public void ensureStarted() {
                 }
 
-                @Override
-                public void mount(JNode rootNode, WindowSettings windowSettings) {
-                }
-            })
-            .run(context -> {
-                assertThat(context).hasSingleBean(RuntimeRegistry.class);
-                assertThat(context).hasSingleBean(JactRuntime.class);
-                assertThat(context).hasSingleBean(ApplicationRunner.class);
-            });
+            @Override
+            public void mount(JNode rootNode, WindowSettings windowSettings) {
+            }
+
+            @Override
+            public void update(JNode rootNode) {
+            }
+
+            @Override
+            public void executeOnUiThread(Runnable task) {
+                task.run();
+            }
+        })
+        .run(context -> {
+            assertThat(context).hasSingleBean(RuntimeRegistry.class);
+            assertThat(context).hasSingleBean(JactRuntime.class);
+            assertThat(context).hasSingleBean(Navigator.class);
+            assertThat(context).hasSingleBean(ApplicationRunner.class);
+        });
     }
 }

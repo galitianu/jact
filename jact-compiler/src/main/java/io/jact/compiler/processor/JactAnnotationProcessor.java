@@ -1,11 +1,20 @@
-package io.jact.compiler;
+package io.jact.compiler.processor;
 
 import io.jact.annotations.JactComponent;
 import io.jact.annotations.JactPage;
 
-import javax.annotation.processing.*;
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Filer;
+import javax.annotation.processing.Messager;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
-import javax.lang.model.element.*;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
@@ -13,13 +22,19 @@ import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 import java.io.IOException;
 import java.io.Writer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 @SupportedSourceVersion(SourceVersion.RELEASE_21)
 public final class JactAnnotationProcessor extends AbstractProcessor {
     private final List<ComponentEntry> componentEntries = new ArrayList<>();
     private final List<PageEntry> pageEntries = new ArrayList<>();
-    private final Map<String, Element> routes = new HashMap<>();
+    private final Map<String, Element> routeSignatures = new HashMap<>();
     private boolean generated;
 
     private Messager messager;
@@ -97,11 +112,17 @@ public final class JactAnnotationProcessor extends AbstractProcessor {
         }
 
         JactPage annotation = executableElement.getAnnotation(JactPage.class);
-        String route = normalizePath(annotation.path().isBlank() ? deriveRoute(executableElement) : annotation.path());
-        Element previousElement = routes.putIfAbsent(route, executableElement);
+        String derivedRoute = annotation.path().isBlank() ? deriveRoute(executableElement) : annotation.path();
+        if (derivedRoute == null) {
+            return;
+        }
+
+        String route = normalizePath(derivedRoute);
+        String signature = routeSignature(route);
+        Element previousElement = routeSignatures.putIfAbsent(signature, executableElement);
         if (previousElement != null) {
-            error(executableElement, "Duplicate page route '%s'.", route);
-            error(previousElement, "Route '%s' already declared here.", route);
+            error(executableElement, "Duplicate page route pattern '%s'.", route);
+            error(previousElement, "Conflicting route pattern already declared here.");
             return;
         }
 
@@ -135,31 +156,99 @@ public final class JactAnnotationProcessor extends AbstractProcessor {
 
     private String deriveRoute(ExecutableElement executableElement) {
         TypeElement owner = (TypeElement) executableElement.getEnclosingElement();
-        String className = owner.getSimpleName().toString();
-        String routeBase = className
+        List<String> routeSegments = new ArrayList<>();
+
+        String packageName = elements.getPackageOf(owner).getQualifiedName().toString();
+        List<String> packageSegments = packageName.isBlank()
+            ? List.of()
+            : List.of(packageName.split("\\."));
+
+        int startIndex = packageSegments.indexOf("pages");
+        if (startIndex >= 0) {
+            startIndex += 1;
+            for (int i = startIndex; i < packageSegments.size(); i++) {
+                String mapped = mapSegment(packageSegments.get(i), executableElement);
+                if (mapped == null) {
+                    return null;
+                }
+                if (!mapped.isBlank() && !"index".equals(mapped)) {
+                    routeSegments.add(mapped);
+                }
+            }
+        }
+
+        String classSegment = owner.getSimpleName().toString()
             .replaceAll("Pages?$", "")
             .replaceAll("Page$", "");
 
-        if (routeBase.isBlank()) {
+        if (!classSegment.isBlank()) {
+            String mappedClass = mapSegment(classSegment, executableElement);
+            if (mappedClass == null) {
+                return null;
+            }
+            if (!mappedClass.isBlank() && !"index".equals(mappedClass)) {
+                routeSegments.add(mappedClass);
+            }
+        }
+
+        if (routeSegments.isEmpty()) {
             return "/";
         }
 
-        String kebab = routeBase
+        return "/" + String.join("/", routeSegments);
+    }
+
+    private String mapSegment(String rawSegment, Element errorElement) {
+        if (rawSegment == null || rawSegment.isBlank()) {
+            return "";
+        }
+
+        if (rawSegment.startsWith("$")) {
+            if (!rawSegment.matches("\\$[A-Za-z][A-Za-z0-9_]*")) {
+                error(errorElement, "Invalid dynamic route segment '%s'. Use $name with alphanumeric/underscore characters.", rawSegment);
+                return null;
+            }
+            return rawSegment;
+        }
+
+        if (rawSegment.contains("$")) {
+            error(errorElement, "Invalid segment '%s'. Dynamic route segments must start with '$'.", rawSegment);
+            return null;
+        }
+
+        return rawSegment
             .replaceAll("([a-z])([A-Z])", "$1-$2")
             .toLowerCase(Locale.ROOT);
+    }
 
-        if ("index".equals(kebab)) {
-            return "/";
+    private String routeSignature(String route) {
+        if ("/".equals(route)) {
+            return route;
         }
 
-        return "/" + kebab;
+        String[] segments = route.substring(1).split("/");
+        List<String> normalized = new ArrayList<>(segments.length);
+        for (String segment : segments) {
+            normalized.add(segment.startsWith("$") ? "$" : segment);
+        }
+        return "/" + String.join("/", normalized);
     }
 
     private String normalizePath(String rawPath) {
         if (rawPath == null || rawPath.isBlank() || "/".equals(rawPath)) {
             return "/";
         }
-        return rawPath.startsWith("/") ? rawPath : "/" + rawPath;
+
+        String normalized = rawPath.trim();
+        if (!normalized.startsWith("/")) {
+            normalized = "/" + normalized;
+        }
+
+        if (normalized.length() > 1 && normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+
+        return normalized;
     }
 
     private void writeComponentRegistry() {

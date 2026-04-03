@@ -2,12 +2,14 @@ package io.jact.compiler;
 
 import com.google.testing.compile.Compilation;
 import com.google.testing.compile.Compiler;
+import io.jact.compiler.processor.JactAnnotationProcessor;
 import org.junit.jupiter.api.Test;
 
 import javax.tools.JavaFileObject;
 
 import static com.google.testing.compile.CompilationSubject.assertThat;
 import static com.google.testing.compile.JavaFileObjects.forSourceString;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JactAnnotationProcessorTest {
     @Test
@@ -107,6 +109,32 @@ class JactAnnotationProcessorTest {
             .compile(pageA, pageB);
 
         assertThat(compilation).failed();
-        assertThat(compilation).hadErrorContaining("Duplicate page route '/same'");
+        assertThat(compilation).hadErrorContaining("Duplicate page route pattern '/same'");
+    }
+
+    @Test
+    void generatesDynamicRouteFromPagesPackageConvention() throws Exception {
+        JavaFileObject dynamicPage = forSourceString("io.jact.sample.pages.tasks.$id.TaskDetailPage", """
+            package io.jact.sample.pages.tasks.$id;
+
+            import io.jact.annotations.JNode;
+            import io.jact.annotations.JactPage;
+
+            public class TaskDetailPage {
+              @JactPage
+              public JNode taskDetail() {
+                return new JNode() {};
+              }
+            }
+            """);
+
+        Compilation compilation = Compiler.javac()
+            .withProcessors(new JactAnnotationProcessor())
+            .compile(dynamicPage);
+
+        assertThat(compilation).succeeded();
+        JavaFileObject generated = compilation.generatedSourceFile("io.jact.generated.GeneratedPageRegistry")
+            .orElseThrow();
+        assertTrue(generated.getCharContent(false).toString().contains("/tasks/$id/task-detail"));
     }
 }

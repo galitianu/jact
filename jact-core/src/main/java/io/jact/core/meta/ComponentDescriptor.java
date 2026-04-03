@@ -1,4 +1,4 @@
-package io.jact.core.descriptor;
+package io.jact.core.meta;
 
 public record ComponentDescriptor(String beanClassName, String methodName) {
 }

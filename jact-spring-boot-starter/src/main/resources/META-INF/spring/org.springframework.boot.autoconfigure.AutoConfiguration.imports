@@ -1,1 +1,1 @@
-io.jact.spring.boot.JactAutoConfiguration
+io.jact.spring.boot.autoconfigure.JactAutoConfiguration

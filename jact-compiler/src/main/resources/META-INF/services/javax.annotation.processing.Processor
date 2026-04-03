@@ -1,1 +1,1 @@
-io.jact.compiler.JactAnnotationProcessor
+io.jact.compiler.processor.JactAnnotationProcessor

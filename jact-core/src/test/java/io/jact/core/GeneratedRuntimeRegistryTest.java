@@ -1,5 +1,6 @@
 package io.jact.core;
 
+import io.jact.core.registry.GeneratedRuntimeRegistry;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
