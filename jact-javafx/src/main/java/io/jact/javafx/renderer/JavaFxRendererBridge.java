@@ -5,6 +5,7 @@ import io.jact.core.internal.JactRuntimeException;
 import io.jact.core.node.ButtonNode;
 import io.jact.core.node.ContainerNode;
 import io.jact.core.node.KeyedNode;
+import io.jact.core.node.ScrollAreaNode;
 import io.jact.core.node.TextInputNode;
 import io.jact.core.node.TextNode;
 import io.jact.core.runtime.WindowSettings;
@@ -15,6 +16,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.IndexRange;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -166,6 +168,24 @@ public final class JavaFxRendererBridge implements RendererBridge {
             }
             case ContainerNode(List<JNode> children) -> {
                 reconcileContainer(current, children);
+                return current;
+            }
+            case ScrollAreaNode(JNode child) -> {
+                ScrollPane scrollPane = (ScrollPane) current.fxNode;
+                RenderedNode previousChild = current.children.isEmpty() ? null : current.children.get(0);
+                NodeSpec nextChildSpec = normalize(child);
+
+                RenderedNode nextRenderedChild;
+                if (previousChild == null || previousChild.kind != kindOf(nextChildSpec.node())) {
+                    nextRenderedChild = createRenderedNode(nextChildSpec);
+                } else {
+                    nextRenderedChild = reconcile(previousChild, nextChildSpec);
+                }
+
+                current.children = List.of(nextRenderedChild);
+                if (scrollPane.getContent() != nextRenderedChild.fxNode) {
+                    scrollPane.setContent(nextRenderedChild.fxNode);
+                }
                 return current;
             }
             default -> throw unsupportedNode(next.node());
@@ -323,6 +343,22 @@ public final class JavaFxRendererBridge implements RendererBridge {
                 rendered.children = childNodes;
                 yield rendered;
             }
+            case ScrollAreaNode(JNode child) -> {
+                NodeSpec childSpec = normalize(child);
+                RenderedNode childRendered = createRenderedNode(childSpec);
+                ScrollPane scrollPane = new ScrollPane(childRendered.fxNode);
+                scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+                scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+                scrollPane.setFitToWidth(true);
+                scrollPane.setFitToHeight(false);
+                scrollPane.setPannable(true);
+                scrollPane.setFocusTraversable(false);
+                scrollPane.getStyleClass().add("edge-to-edge");
+
+                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.SCROLL_AREA, scrollPane);
+                rendered.children = List.of(childRendered);
+                yield rendered;
+            }
             default -> throw unsupportedNode(spec.node());
         };
     }
@@ -350,6 +386,9 @@ public final class JavaFxRendererBridge implements RendererBridge {
         if (node instanceof ContainerNode) {
             return NodeKind.CONTAINER;
         }
+        if (node instanceof ScrollAreaNode) {
+            return NodeKind.SCROLL_AREA;
+        }
         throw unsupportedNode(node);
     }
 
@@ -361,7 +400,8 @@ public final class JavaFxRendererBridge implements RendererBridge {
         TEXT,
         BUTTON,
         INPUT,
-        CONTAINER
+        CONTAINER,
+        SCROLL_AREA
     }
 
     private record NodeSpec(String key, JNode node) {

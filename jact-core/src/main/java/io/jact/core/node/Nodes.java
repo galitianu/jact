@@ -25,6 +25,10 @@ public final class Nodes {
         return new KeyedNode(key, child);
     }
 
+    public static ScrollAreaNode scrollArea(JNode child) {
+        return new ScrollAreaNode(child);
+    }
+
     public static ContainerNode column(JNode... children) {
         return new ContainerNode(Arrays.asList(children));
     }

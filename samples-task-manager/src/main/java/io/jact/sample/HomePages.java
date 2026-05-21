@@ -56,12 +56,13 @@ public class HomePages {
         }));
 
         nodes.add(Nodes.text("Task list (" + tasks.size() + ")"));
+        List<JNode> taskListNodes = new ArrayList<>();
         if (tasks.isEmpty()) {
-            nodes.add(Nodes.text("No tasks match your current search/filter."));
+            taskListNodes.add(Nodes.text("No tasks match your current search/filter."));
         } else {
             for (TaskView task : tasks) {
                 String status = task.completed() ? "DONE" : "OPEN";
-                nodes.add(Nodes.key("task-row-" + task.id(), Nodes.column(
+                taskListNodes.add(Nodes.key("task-row-" + task.id(), Nodes.column(
                     Nodes.text("#" + task.id() + " [" + status + "] " + task.title()),
                     Nodes.button("Open #" + task.id(), () -> navigator.push("/tasks/" + task.id())),
                     Nodes.button(task.completed() ? "Mark Open #" + task.id() : "Mark Done #" + task.id(), () -> taskService.toggleCompleted(task.id())),
@@ -69,6 +70,7 @@ public class HomePages {
                 )));
             }
         }
+        nodes.add(Nodes.scrollArea(Nodes.column(taskListNodes.toArray(JNode[]::new))));
 
         return Nodes.column(nodes.toArray(JNode[]::new));
     }
