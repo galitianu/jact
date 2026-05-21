@@ -4,29 +4,38 @@ import io.jact.annotations.JNode;
 import io.jact.core.internal.JactRuntimeException;
 import io.jact.core.node.ButtonNode;
 import io.jact.core.node.ContainerNode;
-import io.jact.core.node.TextNode;
+import io.jact.core.node.KeyedNode;
 import io.jact.core.node.TextInputNode;
+import io.jact.core.node.TextNode;
 import io.jact.core.runtime.WindowSettings;
 import io.jact.core.runtime.spi.RendererBridge;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.IndexRange;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 public final class JavaFxRendererBridge implements RendererBridge {
     private final AtomicBoolean started = new AtomicBoolean(false);
 
     private volatile Stage stage;
     private volatile StackPane rootContainer;
+    private volatile RenderedNode rootRendered;
 
     @Override
     public void ensureStarted() {
@@ -57,7 +66,9 @@ public final class JavaFxRendererBridge implements RendererBridge {
                 stage.setScene(scene);
                 stage.show();
             }
-            rootContainer.getChildren().setAll(toFxNode(rootNode));
+
+            rootRendered = createRenderedNode(normalize(rootNode));
+            rootContainer.getChildren().setAll(rootRendered.fxNode);
         });
     }
 
@@ -68,7 +79,17 @@ public final class JavaFxRendererBridge implements RendererBridge {
             if (rootContainer == null) {
                 throw new JactRuntimeException("Cannot update renderer before initial mount.");
             }
-            rootContainer.getChildren().setAll(toFxNode(rootNode));
+
+            NodeSpec nextSpec = normalize(rootNode);
+            if (rootRendered == null) {
+                rootRendered = createRenderedNode(nextSpec);
+            } else {
+                rootRendered = reconcile(rootRendered, nextSpec);
+            }
+
+            if (rootContainer.getChildren().isEmpty() || rootContainer.getChildren().get(0) != rootRendered.fxNode) {
+                rootContainer.getChildren().setAll(rootRendered.fxNode);
+            }
         });
     }
 
@@ -109,32 +130,256 @@ public final class JavaFxRendererBridge implements RendererBridge {
         }
     }
 
-    private Node toFxNode(JNode node) {
-        if (node instanceof TextNode(String value)) {
-            return new Label(value);
+    private RenderedNode reconcile(RenderedNode current, NodeSpec next) {
+        NodeKind nextKind = kindOf(next.node());
+        if (current.kind != nextKind) {
+            return createRenderedNode(next);
         }
 
-        if (node instanceof ButtonNode(String label, Runnable onClick)) {
-            Button button = new Button(label);
-            button.setOnAction(event -> onClick.run());
-            return button;
-        }
-
-        if (node instanceof TextInputNode(String value, String placeholder, java.util.function.Consumer<String> onChange)) {
-            TextField textField = new TextField(value);
-            textField.setPromptText(placeholder);
-            textField.textProperty().addListener((observable, oldValue, newValue) -> onChange.accept(newValue));
-            return textField;
-        }
-
-        if (node instanceof ContainerNode(List<JNode> children)) {
-            VBox vBox = new VBox(8);
-            for (JNode child : children) {
-                vBox.getChildren().add(toFxNode(child));
+        current.key = next.key();
+        switch (next.node()) {
+            case TextNode(String value) -> {
+                Label label = (Label) current.fxNode;
+                if (!value.equals(label.getText())) {
+                    label.setText(value);
+                }
+                return current;
             }
-            return vBox;
+            case ButtonNode(String label, Runnable onClick) -> {
+                Button button = (Button) current.fxNode;
+                if (!label.equals(button.getText())) {
+                    button.setText(label);
+                }
+                current.buttonClick = onClick;
+                button.setOnAction(event -> current.buttonClick.run());
+                return current;
+            }
+            case TextInputNode(String value, String placeholder, Consumer<String> onChange) -> {
+                TextField textField = (TextField) current.fxNode;
+                if (!placeholder.equals(textField.getPromptText())) {
+                    textField.setPromptText(placeholder);
+                }
+
+                current.inputChange = onChange;
+                patchInputValue(current, textField, value);
+                return current;
+            }
+            case ContainerNode(List<JNode> children) -> {
+                reconcileContainer(current, children);
+                return current;
+            }
+            default -> throw unsupportedNode(next.node());
+        }
+    }
+
+    private void patchInputValue(RenderedNode holder, TextField textField, String nextValue) {
+        String normalizedNext = nextValue == null ? "" : nextValue;
+        if (normalizedNext.equals(textField.getText())) {
+            return;
         }
 
-        return new Label(node.getClass().getSimpleName());
+        boolean focused = textField.isFocused();
+        int caret = textField.getCaretPosition();
+        IndexRange selection = textField.getSelection();
+
+        holder.syncingInput = true;
+        try {
+            textField.setText(normalizedNext);
+        } finally {
+            holder.syncingInput = false;
+        }
+
+        if (!focused) {
+            return;
+        }
+
+        int max = normalizedNext.length();
+        int selectionStart = Math.min(selection.getStart(), max);
+        int selectionEnd = Math.min(selection.getEnd(), max);
+        int caretTarget = Math.min(caret, max);
+
+        textField.requestFocus();
+        if (selectionStart != selectionEnd) {
+            textField.selectRange(selectionStart, selectionEnd);
+        } else {
+            textField.positionCaret(caretTarget);
+        }
+    }
+
+    private void reconcileContainer(RenderedNode containerHolder, List<JNode> nextChildrenRaw) {
+        VBox vBox = (VBox) containerHolder.fxNode;
+        List<RenderedNode> previousChildren = containerHolder.children;
+        List<NodeSpec> nextChildren = normalizeChildren(nextChildrenRaw);
+
+        validateDuplicateKeys(nextChildren);
+
+        Map<String, RenderedNode> oldKeyed = new LinkedHashMap<>();
+        List<RenderedNode> oldUnkeyed = new ArrayList<>();
+        for (RenderedNode child : previousChildren) {
+            if (child.key != null) {
+                oldKeyed.put(child.key, child);
+            } else {
+                oldUnkeyed.add(child);
+            }
+        }
+
+        List<RenderedNode> merged = new ArrayList<>(nextChildren.size());
+        int oldUnkeyedIndex = 0;
+        for (NodeSpec nextChild : nextChildren) {
+            RenderedNode nextRendered;
+            if (nextChild.key() != null) {
+                RenderedNode existing = oldKeyed.remove(nextChild.key());
+                nextRendered = existing == null
+                    ? createRenderedNode(nextChild)
+                    : reconcile(existing, nextChild);
+            } else {
+                if (oldUnkeyedIndex < oldUnkeyed.size()) {
+                    RenderedNode existing = oldUnkeyed.get(oldUnkeyedIndex++);
+                    if (existing.kind == kindOf(nextChild.node())) {
+                        nextRendered = reconcile(existing, nextChild);
+                    } else {
+                        // For unkeyed mismatches (for example route/page transitions),
+                        // replace the node instead of failing hard.
+                        nextRendered = createRenderedNode(nextChild);
+                    }
+                } else {
+                    nextRendered = createRenderedNode(nextChild);
+                }
+            }
+            nextRendered.key = nextChild.key();
+            merged.add(nextRendered);
+        }
+
+        containerHolder.children = merged;
+        List<Node> expectedOrder = merged.stream().map(child -> child.fxNode).toList();
+        if (!sameOrder(vBox.getChildren(), expectedOrder)) {
+            vBox.getChildren().setAll(expectedOrder);
+        }
+    }
+
+    private void validateDuplicateKeys(List<NodeSpec> children) {
+        Set<String> seen = new HashSet<>();
+        for (NodeSpec child : children) {
+            if (child.key() == null) {
+                continue;
+            }
+            if (!seen.add(child.key())) {
+                throw new JactRuntimeException("Duplicate sibling key '" + child.key() + "' detected. Keys must be unique among siblings.");
+            }
+        }
+    }
+
+    private List<NodeSpec> normalizeChildren(List<JNode> rawChildren) {
+        List<NodeSpec> normalized = new ArrayList<>(rawChildren.size());
+        for (JNode child : rawChildren) {
+            normalized.add(normalize(child));
+        }
+        return normalized;
+    }
+
+    private boolean sameOrder(List<Node> current, List<Node> expected) {
+        if (current.size() != expected.size()) {
+            return false;
+        }
+        for (int i = 0; i < current.size(); i++) {
+            if (current.get(i) != expected.get(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private RenderedNode createRenderedNode(NodeSpec spec) {
+        return switch (spec.node()) {
+            case TextNode(String value) -> new RenderedNode(spec.key(), NodeKind.TEXT, new Label(value));
+            case ButtonNode(String label, Runnable onClick) -> {
+                Button button = new Button(label);
+                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.BUTTON, button);
+                rendered.buttonClick = onClick;
+                button.setOnAction(event -> rendered.buttonClick.run());
+                yield rendered;
+            }
+            case TextInputNode(String value, String placeholder, Consumer<String> onChange) -> {
+                TextField textField = new TextField(value);
+                textField.setPromptText(placeholder);
+                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.INPUT, textField);
+                rendered.inputChange = onChange;
+                textField.textProperty().addListener((observable, oldValue, newValue) -> {
+                    if (!rendered.syncingInput && rendered.inputChange != null) {
+                        rendered.inputChange.accept(newValue);
+                    }
+                });
+                yield rendered;
+            }
+            case ContainerNode(List<JNode> children) -> {
+                VBox vBox = new VBox(8);
+                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.CONTAINER, vBox);
+                List<RenderedNode> childNodes = new ArrayList<>(children.size());
+                for (NodeSpec childSpec : normalizeChildren(children)) {
+                    RenderedNode childRendered = createRenderedNode(childSpec);
+                    childNodes.add(childRendered);
+                    vBox.getChildren().add(childRendered.fxNode);
+                }
+                rendered.children = childNodes;
+                yield rendered;
+            }
+            default -> throw unsupportedNode(spec.node());
+        };
+    }
+
+    private NodeSpec normalize(JNode node) {
+        JNode current = node;
+        String key = null;
+        while (current instanceof KeyedNode keyedNode) {
+            key = keyedNode.key();
+            current = keyedNode.child();
+        }
+        return new NodeSpec(key, current);
+    }
+
+    private NodeKind kindOf(JNode node) {
+        if (node instanceof TextNode) {
+            return NodeKind.TEXT;
+        }
+        if (node instanceof ButtonNode) {
+            return NodeKind.BUTTON;
+        }
+        if (node instanceof TextInputNode) {
+            return NodeKind.INPUT;
+        }
+        if (node instanceof ContainerNode) {
+            return NodeKind.CONTAINER;
+        }
+        throw unsupportedNode(node);
+    }
+
+    private JactRuntimeException unsupportedNode(JNode node) {
+        return new JactRuntimeException("Unsupported JNode type: " + node.getClass().getName());
+    }
+
+    private enum NodeKind {
+        TEXT,
+        BUTTON,
+        INPUT,
+        CONTAINER
+    }
+
+    private record NodeSpec(String key, JNode node) {
+    }
+
+    private static final class RenderedNode {
+        private String key;
+        private final NodeKind kind;
+        private final Node fxNode;
+        private List<RenderedNode> children = List.of();
+        private Runnable buttonClick;
+        private Consumer<String> inputChange;
+        private boolean syncingInput;
+
+        private RenderedNode(String key, NodeKind kind, Node fxNode) {
+            this.key = key;
+            this.kind = kind;
+            this.fxNode = fxNode;
+        }
     }
 }

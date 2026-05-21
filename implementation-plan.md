@@ -56,6 +56,7 @@ Deliverables:
 - Spring Boot starter auto-configuration and runtime integration.
 - Global store API integrated with hooks.
 - Reactive service-state bridge so independently-changing Spring service values can trigger UI updates automatically.
+- Focus-stable renderer reconciliation with React-style key semantics for dynamic sibling collections.
 - `samples-task-manager` database-backed reference app with:
   - task list and detail pages,
   - create/edit/delete flows,
@@ -67,6 +68,7 @@ Acceptance criteria:
 - Integration test suite covers render lifecycle, event-to-state updates, and navigation.
 - Store selector subscriptions rerender only when selected values change.
 - A UI component subscribed to independently-changing service state updates automatically without manual refresh.
+- Rerenders preserve focus/caret when element identity is stable.
 - v1 API surface is frozen at milestone end.
 
 ### M4: Stabilization and Thesis Packaging (May 18, 2026 to June 16, 2026)
@@ -159,6 +161,7 @@ Acceptance criteria:
 - Core types: `JNode`, `Hooks`, `State<T>`.
 - Routing: `Navigator` (`push`, `replace`, `back`), `RouteTemplate`, `RouteParams`.
 - Store/observable: `Store<T>`, `SimpleStore<T>`, `ObservableValue<T>`, `Subscription`, selectors/subscriptions, hook integration utilities, and external service subscription adapters.
+- Renderer identity: `KeyedNode`, `Nodes.key(...)` for dynamic sibling identity; static sibling nodes can remain unkeyed.
 - Spring starter configuration: `JactProperties` (pages root package, initial route, window settings).
 
 ## Test Plan

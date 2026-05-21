@@ -48,7 +48,18 @@ The milestone introduces shared store primitives, an external observable bridge,
 
 5. Documentation and milestone lock
 - Align `implementation-plan.md` M3 section with concrete API and validation commitments.
+- Document focus-stable rendering and key semantics for dynamic sibling collections.
 - Freeze public M3 API at milestone end.
+
+6. Focus-stable rendering and React-style keys (`jact-javafx` + `jact-core`)
+- Replace full subtree replacement updates with retained-node reconciliation so controls are reused.
+- Preserve active focus and text input caret/selection when element identity is preserved.
+- Add `KeyedNode` / `Nodes.key(...)` for explicit identity in dynamic collections.
+- Apply React-style key policy:
+  - keys are required for dynamic sibling groups (insert/remove/reorder)
+  - keys are optional for static/non-reordered sibling groups
+  - sibling keys must be unique when provided
+- Add diagnostics for ambiguous unkeyed dynamic sibling updates with guidance to use `Nodes.key(...)`.
 
 ## Week-by-Week Execution
 1. Week 1 (April 27 to May 3)
@@ -70,6 +81,7 @@ Exit gate:
 
 3. Week 3 (May 11 to May 17)
 - Complete sample UI flows and route detail page behavior.
+- Implement and validate focus-stable renderer reconciliation.
 - Add end-to-end validation tests for CRUD + search/filter + navigation.
 - Finalize M3 documentation and acceptance checks.
 
@@ -83,12 +95,16 @@ Exit gate:
   - `ObservableValue<T>`
   - `Store<T>`
   - `SimpleStore<T>`
+  - `KeyedNode`
+  - `Nodes.key(...)`
   - `Hooks.useStore(...)`
   - `Hooks.useExternal(...)`
 - Behavior commitments:
   - Store selector subscriptions rerender only when selected values change.
   - External service updates trigger automatic rerender of subscribed components.
   - Subscription resources are cleaned up on unmount.
+  - Focus and caret remain stable through rerenders when control identity is preserved.
+  - Keyed matching is used for dynamic siblings, with positional fallback for static unkeyed siblings.
 
 ## Test Plan
 1. Runtime and hook tests
@@ -102,6 +118,12 @@ Exit gate:
 3. Validation app tests
 - Service-level CRUD, search/filter behavior, and observable notifications.
 - Spring boot context and persistence wiring smoke tests.
+- Dynamic task list rows render with explicit keys while static controls remain unkeyed.
+
+4. Renderer focus/reconciliation tests
+- Typing in input fields remains uninterrupted across rerenders.
+- Button focus is preserved for reused controls.
+- Ambiguous unkeyed dynamic sibling updates fail with actionable diagnostics.
 
 ## Acceptance Criteria
 - `Store` and `ObservableValue` APIs are implemented and covered by tests.
@@ -109,6 +131,8 @@ Exit gate:
 - Starter resolves page method arguments from Spring context by type.
 - Task Manager sample supports DB-backed create/edit/delete/search/filter/detail flows.
 - Service-driven state changes rerender subscribed UI without manual refresh.
+- Rerenders preserve focus/caret for reused controls.
+- Dynamic sibling collections are keyed where required.
 - M3 public API surface is frozen for M4 stabilization.
 
 ## Assumptions and Defaults

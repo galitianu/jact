@@ -21,6 +21,10 @@ public final class Nodes {
         return new TextInputNode(value, placeholder, onChange);
     }
 
+    public static KeyedNode key(String key, JNode child) {
+        return new KeyedNode(key, child);
+    }
+
     public static ContainerNode column(JNode... children) {
         return new ContainerNode(Arrays.asList(children));
     }

@@ -61,10 +61,12 @@ public class HomePages {
         } else {
             for (TaskView task : tasks) {
                 String status = task.completed() ? "DONE" : "OPEN";
-                nodes.add(Nodes.text("#" + task.id() + " [" + status + "] " + task.title()));
-                nodes.add(Nodes.button("Open #" + task.id(), () -> navigator.push("/tasks/" + task.id())));
-                nodes.add(Nodes.button(task.completed() ? "Mark Open #" + task.id() : "Mark Done #" + task.id(), () -> taskService.toggleCompleted(task.id())));
-                nodes.add(Nodes.button("Delete #" + task.id(), () -> taskService.delete(task.id())));
+                nodes.add(Nodes.key("task-row-" + task.id(), Nodes.column(
+                    Nodes.text("#" + task.id() + " [" + status + "] " + task.title()),
+                    Nodes.button("Open #" + task.id(), () -> navigator.push("/tasks/" + task.id())),
+                    Nodes.button(task.completed() ? "Mark Open #" + task.id() : "Mark Done #" + task.id(), () -> taskService.toggleCompleted(task.id())),
+                    Nodes.button("Delete #" + task.id(), () -> taskService.delete(task.id()))
+                )));
             }
         }
 
