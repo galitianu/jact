@@ -10,7 +10,9 @@ import io.jact.core.node.KeyedNode;
 import io.jact.core.node.RowNode;
 import io.jact.core.node.ScrollAreaNode;
 import io.jact.core.node.SelectNode;
+import io.jact.core.node.NodeStyle;
 import io.jact.core.node.SpacerNode;
+import io.jact.core.node.StyledNode;
 import io.jact.core.node.TextInputNode;
 import io.jact.core.node.TextNode;
 import javafx.collections.ObservableList;
@@ -22,6 +24,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Control;
 import javafx.scene.control.IndexRange;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
@@ -32,6 +35,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.geometry.Pos;
 import javafx.stage.Stage;
 
 import java.util.ArrayList;
@@ -151,6 +155,7 @@ public final class JavaFxRendererBridge implements RendererBridge {
         }
 
         current.key = next.key();
+        applyStyle(current, next.style());
         switch (next.node()) {
             case TextNode(String value) -> {
                 Label label = (Label) current.fxNode;
@@ -363,75 +368,75 @@ public final class JavaFxRendererBridge implements RendererBridge {
     }
 
     private RenderedNode createRenderedNode(NodeSpec spec) {
-        return switch (spec.node()) {
+        RenderedNode rendered = switch (spec.node()) {
             case TextNode(String value) -> new RenderedNode(spec.key(), NodeKind.TEXT, new Label(value));
             case ButtonNode(String label, Runnable onClick) -> {
                 Button button = new Button(label);
-                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.BUTTON, button);
-                rendered.buttonClick = onClick;
-                button.setOnAction(event -> rendered.buttonClick.run());
-                yield rendered;
+                RenderedNode created = new RenderedNode(spec.key(), NodeKind.BUTTON, button);
+                created.buttonClick = onClick;
+                button.setOnAction(event -> created.buttonClick.run());
+                yield created;
             }
             case TextInputNode(String value, String placeholder, Consumer<String> onChange) -> {
                 TextField textField = new TextField(value);
                 textField.setPromptText(placeholder);
-                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.INPUT, textField);
-                rendered.inputChange = onChange;
+                RenderedNode created = new RenderedNode(spec.key(), NodeKind.INPUT, textField);
+                created.inputChange = onChange;
                 textField.textProperty().addListener((observable, oldValue, newValue) -> {
-                    if (!rendered.syncingInput && rendered.inputChange != null) {
-                        rendered.inputChange.accept(newValue);
+                    if (!created.syncingInput && created.inputChange != null) {
+                        created.inputChange.accept(newValue);
                     }
                 });
-                yield rendered;
+                yield created;
             }
             case CheckboxNode(String label, boolean checked, Consumer<Boolean> onChange) -> {
                 CheckBox checkBox = new CheckBox(label);
                 checkBox.setSelected(checked);
-                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.CHECKBOX, checkBox);
-                rendered.checkboxChange = onChange;
+                RenderedNode created = new RenderedNode(spec.key(), NodeKind.CHECKBOX, checkBox);
+                created.checkboxChange = onChange;
                 checkBox.selectedProperty().addListener((observable, oldValue, newValue) -> {
-                    if (!rendered.syncingCheckbox && rendered.checkboxChange != null) {
-                        rendered.checkboxChange.accept(newValue);
+                    if (!created.syncingCheckbox && created.checkboxChange != null) {
+                        created.checkboxChange.accept(newValue);
                     }
                 });
-                yield rendered;
+                yield created;
             }
             case SelectNode(String value, List<String> options, Consumer<String> onChange) -> {
                 ComboBox<String> comboBox = new ComboBox<>();
                 comboBox.getItems().setAll(options);
                 comboBox.setValue(value);
-                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.SELECT, comboBox);
-                rendered.selectChange = onChange;
+                RenderedNode created = new RenderedNode(spec.key(), NodeKind.SELECT, comboBox);
+                created.selectChange = onChange;
                 comboBox.valueProperty().addListener((observable, oldValue, newValue) -> {
-                    if (!rendered.syncingSelect && rendered.selectChange != null) {
-                        rendered.selectChange.accept(newValue);
+                    if (!created.syncingSelect && created.selectChange != null) {
+                        created.selectChange.accept(newValue);
                     }
                 });
-                yield rendered;
+                yield created;
             }
             case ContainerNode(List<JNode> children) -> {
                 VBox vBox = new VBox(8);
-                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.CONTAINER, vBox);
+                RenderedNode created = new RenderedNode(spec.key(), NodeKind.CONTAINER, vBox);
                 List<RenderedNode> childNodes = new ArrayList<>(children.size());
                 for (NodeSpec childSpec : normalizeChildren(children)) {
                     RenderedNode childRendered = createRenderedNode(childSpec);
                     childNodes.add(childRendered);
                     vBox.getChildren().add(childRendered.fxNode);
                 }
-                rendered.children = childNodes;
-                yield rendered;
+                created.children = childNodes;
+                yield created;
             }
             case RowNode(List<JNode> children) -> {
                 HBox hBox = new HBox(8);
-                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.ROW, hBox);
+                RenderedNode created = new RenderedNode(spec.key(), NodeKind.ROW, hBox);
                 List<RenderedNode> childNodes = new ArrayList<>(children.size());
                 for (NodeSpec childSpec : normalizeChildren(children)) {
                     RenderedNode childRendered = createRenderedNode(childSpec);
                     childNodes.add(childRendered);
                     hBox.getChildren().add(childRendered.fxNode);
                 }
-                rendered.children = childNodes;
-                yield rendered;
+                created.children = childNodes;
+                yield created;
             }
             case ScrollAreaNode(JNode child) -> {
                 NodeSpec childSpec = normalize(child);
@@ -445,9 +450,9 @@ public final class JavaFxRendererBridge implements RendererBridge {
                 scrollPane.setFocusTraversable(false);
                 scrollPane.getStyleClass().add("edge-to-edge");
 
-                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.SCROLL_AREA, scrollPane);
-                rendered.children = List.of(childRendered);
-                yield rendered;
+                RenderedNode created = new RenderedNode(spec.key(), NodeKind.SCROLL_AREA, scrollPane);
+                created.children = List.of(childRendered);
+                yield created;
             }
             case SpacerNode ignored -> {
                 Region spacer = new Region();
@@ -458,6 +463,8 @@ public final class JavaFxRendererBridge implements RendererBridge {
             case DividerNode ignored -> new RenderedNode(spec.key(), NodeKind.DIVIDER, new Separator());
             default -> throw unsupportedNode(spec.node());
         };
+        applyStyle(rendered, spec.style());
+        return rendered;
     }
 
     @SuppressWarnings("unchecked")
@@ -468,11 +475,71 @@ public final class JavaFxRendererBridge implements RendererBridge {
     private NodeSpec normalize(JNode node) {
         JNode current = node;
         String key = null;
+        NodeStyle style = NodeStyle.empty();
         while (current instanceof KeyedNode keyedNode) {
             key = keyedNode.key();
             current = keyedNode.child();
         }
-        return new NodeSpec(key, current);
+        while (current instanceof StyledNode styledNode || current instanceof KeyedNode) {
+            if (current instanceof StyledNode styledNode) {
+                style = style.merge(styledNode.style());
+                current = styledNode.child();
+            } else if (current instanceof KeyedNode keyedNode) {
+                key = keyedNode.key();
+                current = keyedNode.child();
+            }
+        }
+        return new NodeSpec(key, current, style);
+    }
+
+    private void applyStyle(RenderedNode rendered, NodeStyle style) {
+        Node node = rendered.fxNode;
+        node.getStyleClass().removeAll(rendered.appliedStyleClasses);
+        rendered.appliedStyleClasses = style.styleClasses();
+        node.getStyleClass().addAll(rendered.appliedStyleClasses);
+        node.setStyle(style.inlineStyle());
+
+        if (style.disabled() != null) {
+            node.setDisable(style.disabled());
+        }
+
+        if (node instanceof Region region) {
+            if (style.minWidth() != null) {
+                region.setMinWidth(style.minWidth());
+            }
+            if (style.prefWidth() != null) {
+                region.setPrefWidth(style.prefWidth());
+            }
+            if (style.maxWidth() != null) {
+                region.setMaxWidth(style.maxWidth());
+            }
+            if (style.minHeight() != null) {
+                region.setMinHeight(style.minHeight());
+            }
+            if (style.prefHeight() != null) {
+                region.setPrefHeight(style.prefHeight());
+            }
+            if (style.maxHeight() != null) {
+                region.setMaxHeight(style.maxHeight());
+            }
+        }
+
+        if (style.spacing() != null) {
+            if (node instanceof VBox vBox) {
+                vBox.setSpacing(style.spacing());
+            } else if (node instanceof HBox hBox) {
+                hBox.setSpacing(style.spacing());
+            }
+        }
+
+        if (style.alignment() != null) {
+            Pos alignment = Pos.valueOf(style.alignment().trim().toUpperCase().replace('-', '_'));
+            if (node instanceof VBox vBox) {
+                vBox.setAlignment(alignment);
+            } else if (node instanceof HBox hBox) {
+                hBox.setAlignment(alignment);
+            }
+        }
     }
 
     private NodeKind kindOf(JNode node) {
@@ -526,7 +593,7 @@ public final class JavaFxRendererBridge implements RendererBridge {
         DIVIDER
     }
 
-    private record NodeSpec(String key, JNode node) {
+    private record NodeSpec(String key, JNode node, NodeStyle style) {
     }
 
     private static final class RenderedNode {
@@ -541,6 +608,7 @@ public final class JavaFxRendererBridge implements RendererBridge {
         private boolean syncingInput;
         private boolean syncingCheckbox;
         private boolean syncingSelect;
+        private List<String> appliedStyleClasses = List.of();
 
         private RenderedNode(String key, NodeKind kind, Node fxNode) {
             this.key = key;

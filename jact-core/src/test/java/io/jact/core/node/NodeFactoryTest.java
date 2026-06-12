@@ -41,4 +41,23 @@ class NodeFactoryTest {
         assertThat(spacer).isNotNull();
         assertThat(divider).isNotNull();
     }
+
+    @Test
+    void createsStyledNodes() {
+        StyledNode styled = Nodes.className(
+            "task-row",
+            Nodes.style(
+                Nodes.text("Task"),
+                NodeStyle.empty()
+                    .withClassName("primary")
+                    .withInlineStyle("-fx-font-weight: bold;")
+                    .withSpacing(12)
+                    .withDisabled(false)
+            )
+        );
+
+        assertThat(styled.style().styleClasses()).containsExactly("task-row");
+        assertThat(((StyledNode) styled.child()).style().styleClasses()).containsExactly("primary");
+        assertThat(((StyledNode) styled.child()).style().inlineStyle()).contains("bold");
+    }
 }

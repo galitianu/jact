@@ -42,6 +42,14 @@ public final class Nodes {
         return new KeyedNode(key, child);
     }
 
+    public static StyledNode style(JNode child, NodeStyle style) {
+        return new StyledNode(child, style);
+    }
+
+    public static StyledNode className(String className, JNode child) {
+        return style(child, NodeStyle.className(className));
+    }
+
     public static ScrollAreaNode scrollArea(JNode child) {
         return new ScrollAreaNode(child);
     }

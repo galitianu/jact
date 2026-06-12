@@ -10,6 +10,7 @@ import io.jact.core.node.ContainerNode;
 import io.jact.core.node.KeyedNode;
 import io.jact.core.node.RowNode;
 import io.jact.core.node.ScrollAreaNode;
+import io.jact.core.node.StyledNode;
 import io.jact.core.registry.RuntimeRegistry;
 import io.jact.core.routing.RouteParams;
 import io.jact.core.routing.RouteTemplate;
@@ -252,6 +253,21 @@ public final class JactRuntime {
                     activeIdentities,
                     postCommitTasks
                 )
+            );
+        }
+
+        if (node instanceof StyledNode styledNode) {
+            return new StyledNode(
+                resolveComponents(
+                    styledNode.child(),
+                    resolver,
+                    routeContext,
+                    parentIdentity,
+                    identitySegment,
+                    activeIdentities,
+                    postCommitTasks
+                ),
+                styledNode.style()
             );
         }
 
