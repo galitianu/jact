@@ -16,10 +16,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
-public class HomePages {
+public class HomePage {
     private final TaskUiState uiState;
 
-    public HomePages(TaskUiState uiState) {
+    public HomePage(TaskUiState uiState) {
         this.uiState = uiState;
     }
 

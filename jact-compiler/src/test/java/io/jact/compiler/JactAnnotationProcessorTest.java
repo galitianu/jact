@@ -14,13 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class JactAnnotationProcessorTest {
     @Test
     void generatesRegistriesForValidAnnotations() {
-        JavaFileObject page = forSourceString("io.jact.sample.HomePages", """
+        JavaFileObject page = forSourceString("io.jact.sample.HomePage", """
             package io.jact.sample;
 
             import io.jact.annotations.JNode;
             import io.jact.annotations.JactPage;
 
-            public class HomePages {
+            public class HomePage {
               @JactPage(path = "/")
               public JNode home() {
                 return new JNode() {};
