@@ -17,10 +17,12 @@ import io.jact.core.runtime.spi.PageResolver;
 import io.jact.core.runtime.spi.RendererBridge;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class JactRuntime {
@@ -164,15 +166,17 @@ public final class JactRuntime {
             throw new JactRuntimeException("Cannot render without route context and initialization settings.");
         }
 
-        String componentKey = pageKey(context.pageDescriptor());
-        HookRuntime.RenderSession renderSession = hookRuntime.beginRender(componentKey, context.params(), navigator);
+        String pageIdentity = pageKey(context.pageDescriptor());
+        Set<String> activeIdentities = new LinkedHashSet<>();
+        List<Runnable> postCommitTasks = new ArrayList<>();
+        activeIdentities.add(pageIdentity);
+        HookRuntime.RenderSession renderSession = hookRuntime.beginRender(pageIdentity, context.params(), navigator);
 
         JNode rootNode;
-        Runnable postCommit;
         try {
             rootNode = resolver.resolve(new RenderRequest(context.path(), context.pageDescriptor(), context.params(), navigator));
-            rootNode = resolveComponents(rootNode, components, context);
-            postCommit = hookRuntime.endRender(renderSession);
+            rootNode = resolveComponents(rootNode, components, context, pageIdentity, "root", activeIdentities, postCommitTasks);
+            postCommitTasks.add(hookRuntime.endRender(renderSession));
         } catch (RuntimeException exception) {
             hookRuntime.abortRender();
             throw exception;
@@ -187,37 +191,95 @@ public final class JactRuntime {
             rendererBridge.update(rootNode);
         }
 
-        postCommit.run();
+        hookRuntime.retainOnly(activeIdentities);
+        for (Runnable postCommitTask : postCommitTasks) {
+            postCommitTask.run();
+        }
     }
 
-    private JNode resolveComponents(JNode node, ComponentResolver resolver, RouteContext routeContext) {
+    private JNode resolveComponents(
+        JNode node,
+        ComponentResolver resolver,
+        RouteContext routeContext,
+        String parentIdentity,
+        String identitySegment,
+        Set<String> activeIdentities,
+        List<Runnable> postCommitTasks
+    ) {
         Objects.requireNonNull(node, "node");
 
         if (node instanceof ComponentNode componentNode) {
             ComponentDescriptor descriptor = resolveComponentDescriptor(componentNode.componentId());
-            JNode resolved = resolver.resolve(new ComponentRequest(
-                componentNode.componentId(),
-                descriptor,
-                componentNode.arguments(),
-                routeContext.path(),
-                routeContext.params(),
-                navigator
-            ));
-            return resolveComponents(resolved, resolver, routeContext);
+            String componentIdentity = componentKey(parentIdentity, identitySegment, descriptor);
+            activeIdentities.add(componentIdentity);
+            HookRuntime.RenderSession renderSession = hookRuntime.beginRender(componentIdentity, routeContext.params(), navigator);
+            try {
+                JNode resolved = resolver.resolve(new ComponentRequest(
+                    componentNode.componentId(),
+                    descriptor,
+                    componentNode.arguments(),
+                    routeContext.path(),
+                    routeContext.params(),
+                    navigator
+                ));
+                JNode resolvedTree = resolveComponents(
+                    resolved,
+                    resolver,
+                    routeContext,
+                    componentIdentity,
+                    "root",
+                    activeIdentities,
+                    postCommitTasks
+                );
+                postCommitTasks.add(hookRuntime.endRender(renderSession));
+                return resolvedTree;
+            } catch (RuntimeException exception) {
+                hookRuntime.abortRender();
+                throw exception;
+            }
         }
 
         if (node instanceof KeyedNode keyedNode) {
-            return new KeyedNode(keyedNode.key(), resolveComponents(keyedNode.child(), resolver, routeContext));
+            return new KeyedNode(
+                keyedNode.key(),
+                resolveComponents(
+                    keyedNode.child(),
+                    resolver,
+                    routeContext,
+                    parentIdentity,
+                    "key:" + keyedNode.key(),
+                    activeIdentities,
+                    postCommitTasks
+                )
+            );
         }
 
         if (node instanceof ContainerNode containerNode) {
-            return new ContainerNode(containerNode.children().stream()
-                .map(child -> resolveComponents(child, resolver, routeContext))
-                .toList());
+            List<JNode> children = new ArrayList<>(containerNode.children().size());
+            for (int i = 0; i < containerNode.children().size(); i++) {
+                children.add(resolveComponents(
+                    containerNode.children().get(i),
+                    resolver,
+                    routeContext,
+                    parentIdentity,
+                    "index:" + i,
+                    activeIdentities,
+                    postCommitTasks
+                ));
+            }
+            return new ContainerNode(children);
         }
 
         if (node instanceof ScrollAreaNode scrollAreaNode) {
-            return new ScrollAreaNode(resolveComponents(scrollAreaNode.child(), resolver, routeContext));
+            return new ScrollAreaNode(resolveComponents(
+                scrollAreaNode.child(),
+                resolver,
+                routeContext,
+                parentIdentity,
+                "scroll-child",
+                activeIdentities,
+                postCommitTasks
+            ));
         }
 
         return node;
@@ -306,7 +368,14 @@ public final class JactRuntime {
     }
 
     private String pageKey(PageDescriptor descriptor) {
-        return descriptor.beanClassName() + "#" + descriptor.methodName();
+        return "page:" + descriptor.beanClassName() + "#" + descriptor.methodName();
+    }
+
+    private String componentKey(String parentIdentity, String identitySegment, ComponentDescriptor descriptor) {
+        return parentIdentity
+            + "/" + identitySegment
+            + ":component:" + descriptor.beanClassName()
+            + "#" + descriptor.methodName();
     }
 
     private enum NavigationMode {

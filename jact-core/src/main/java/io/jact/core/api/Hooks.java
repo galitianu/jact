@@ -3,12 +3,14 @@ package io.jact.core.api;
 import io.jact.core.internal.JactRuntimeException;
 import io.jact.core.routing.RouteParams;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.function.Function;
 import java.util.Objects;
 import java.util.function.Supplier;
 
 public final class Hooks {
-    private static final ThreadLocal<HookExecutionContext> CURRENT_CONTEXT = new ThreadLocal<>();
+    private static final ThreadLocal<Deque<HookExecutionContext>> CURRENT_CONTEXTS = ThreadLocal.withInitial(ArrayDeque::new);
 
     private Hooks() {
     }
@@ -61,20 +63,26 @@ public final class Hooks {
 
     // Internal runtime entrypoint; not intended for application code.
     public static void enter(HookExecutionContext context) {
-        CURRENT_CONTEXT.set(context);
+        CURRENT_CONTEXTS.get().push(context);
     }
 
     // Internal runtime exitpoint; not intended for application code.
     public static void exit() {
-        CURRENT_CONTEXT.remove();
+        Deque<HookExecutionContext> contexts = CURRENT_CONTEXTS.get();
+        if (!contexts.isEmpty()) {
+            contexts.pop();
+        }
+        if (contexts.isEmpty()) {
+            CURRENT_CONTEXTS.remove();
+        }
     }
 
     private static HookExecutionContext requireContext() {
-        HookExecutionContext context = CURRENT_CONTEXT.get();
-        if (context == null) {
+        Deque<HookExecutionContext> contexts = CURRENT_CONTEXTS.get();
+        if (contexts.isEmpty()) {
             throw new JactRuntimeException("Hooks can only be called during a JACT render cycle.");
         }
-        return context;
+        return contexts.peek();
     }
 
     @FunctionalInterface

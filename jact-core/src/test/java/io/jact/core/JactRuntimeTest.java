@@ -6,6 +6,7 @@ import io.jact.core.api.State;
 import io.jact.core.internal.JactRuntimeException;
 import io.jact.core.meta.ComponentDescriptor;
 import io.jact.core.meta.PageDescriptor;
+import io.jact.core.node.ContainerNode;
 import io.jact.core.node.TextNode;
 import io.jact.core.node.Nodes;
 import io.jact.core.registry.RuntimeRegistry;
@@ -217,6 +218,134 @@ class JactRuntimeTest {
     }
 
     @Test
+    void isolatesHookStatePerComponentInstance() {
+        RuntimeRegistry runtimeRegistry = new RuntimeRegistry() {
+            @Override
+            public List<ComponentDescriptor> components() {
+                return List.of(new ComponentDescriptor("io.jact.sample.CounterComponents", "counter"));
+            }
+
+            @Override
+            public List<PageDescriptor> pages() {
+                return List.of(new PageDescriptor("/", "io.jact.sample.HomePage", "home"));
+            }
+        };
+
+        CopyOnWriteArrayList<List<String>> renders = new CopyOnWriteArrayList<>();
+        RendererBridge rendererBridge = new RendererBridge() {
+            @Override
+            public void ensureStarted() {
+            }
+
+            @Override
+            public void mount(JNode rootNode, WindowSettings windowSettings) {
+                renders.add(textValues(rootNode));
+            }
+
+            @Override
+            public void update(JNode rootNode) {
+                renders.add(textValues(rootNode));
+            }
+
+            @Override
+            public void executeOnUiThread(Runnable task) {
+                task.run();
+            }
+        };
+
+        AtomicReference<State<Integer>> firstCounter = new AtomicReference<>();
+        AtomicReference<State<Integer>> secondCounter = new AtomicReference<>();
+
+        JactRuntime runtime = new JactRuntime(runtimeRegistry, rendererBridge);
+        runtime.start();
+        runtime.mountInitialPage(
+            "/",
+            request -> Nodes.column(
+                Nodes.component("counter", "first"),
+                Nodes.component("counter", "second")
+            ),
+            request -> {
+                State<Integer> count = Hooks.useState(0);
+                String name = request.arguments().getFirst().toString();
+                if ("first".equals(name)) {
+                    firstCounter.set(count);
+                } else {
+                    secondCounter.set(count);
+                }
+                return Nodes.text(name + "=" + count.get());
+            },
+            new WindowSettings("demo", 800, 600)
+        );
+
+        firstCounter.get().set(1);
+
+        assertThat(secondCounter.get().get()).isZero();
+        assertThat(renders).containsExactly(
+            List.of("first=0", "second=0"),
+            List.of("first=1", "second=0")
+        );
+    }
+
+    @Test
+    void cleansUpComponentHooksWhenComponentIsRemoved() {
+        RuntimeRegistry runtimeRegistry = new RuntimeRegistry() {
+            @Override
+            public List<ComponentDescriptor> components() {
+                return List.of(new ComponentDescriptor("io.jact.sample.Components", "tracked"));
+            }
+
+            @Override
+            public List<PageDescriptor> pages() {
+                return List.of(new PageDescriptor("/", "io.jact.sample.HomePage", "home"));
+            }
+        };
+
+        RendererBridge rendererBridge = new RendererBridge() {
+            @Override
+            public void ensureStarted() {
+            }
+
+            @Override
+            public void mount(JNode rootNode, WindowSettings windowSettings) {
+            }
+
+            @Override
+            public void update(JNode rootNode) {
+            }
+
+            @Override
+            public void executeOnUiThread(Runnable task) {
+                task.run();
+            }
+        };
+
+        AtomicReference<State<Boolean>> visible = new AtomicReference<>();
+        AtomicBoolean cleanedUp = new AtomicBoolean();
+
+        JactRuntime runtime = new JactRuntime(runtimeRegistry, rendererBridge);
+        runtime.start();
+        runtime.mountInitialPage(
+            "/",
+            request -> {
+                State<Boolean> showComponent = Hooks.useState(true);
+                visible.set(showComponent);
+                return showComponent.get()
+                    ? Nodes.column(Nodes.component("tracked"))
+                    : Nodes.column(Nodes.text("empty"));
+            },
+            request -> {
+                Hooks.useEffect(() -> () -> cleanedUp.set(true));
+                return Nodes.text("tracked");
+            },
+            new WindowSettings("demo", 800, 600)
+        );
+
+        visible.get().set(false);
+
+        assertThat(cleanedUp.get()).isTrue();
+    }
+
+    @Test
     void appliesStateUpdateScheduledFromEffectInSameRenderCycle() {
         RuntimeRegistry runtimeRegistry = new RuntimeRegistry() {
             @Override
@@ -310,5 +439,17 @@ class JactRuntimeTest {
         assertThatThrownBy(() -> Hooks.useState(0))
             .isInstanceOf(JactRuntimeException.class)
             .hasMessageContaining("Hooks can only be called during a JACT render cycle.");
+    }
+
+    private List<String> textValues(JNode node) {
+        if (node instanceof TextNode textNode) {
+            return List.of(textNode.value());
+        }
+        if (node instanceof ContainerNode containerNode) {
+            return containerNode.children().stream()
+                .flatMap(child -> textValues(child).stream())
+                .toList();
+        }
+        return List.of();
     }
 }

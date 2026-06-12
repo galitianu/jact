@@ -11,9 +11,11 @@ import io.jact.core.routing.RouteParams;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -51,6 +53,9 @@ final class HookRuntime {
 
         synchronized (state) {
             for (HookSlot slot : state.slots) {
+                if (slot instanceof StateSlot<?> stateSlot) {
+                    stateSlot.handle.deactivate();
+                }
                 if (slot instanceof EffectSlot effectSlot && effectSlot.cleanup != null) {
                     effectSlot.cleanup.run();
                     effectSlot.cleanup = null;
@@ -58,6 +63,15 @@ final class HookRuntime {
                 if (slot instanceof SubscriptionSlot subscriptionSlot) {
                     subscriptionSlot.dispose();
                 }
+            }
+        }
+    }
+
+    void retainOnly(Set<String> activeComponentKeys) {
+        Set<String> active = new HashSet<>(activeComponentKeys);
+        for (String existingKey : List.copyOf(componentStates.keySet())) {
+            if (!active.contains(existingKey)) {
+                unmount(existingKey);
             }
         }
     }
@@ -134,6 +148,7 @@ final class HookRuntime {
     private static final class StateHandle<T> implements State<T> {
         private final AtomicReference<T> value;
         private final Runnable scheduleRender;
+        private volatile boolean active = true;
 
         private StateHandle(T initialValue, Runnable scheduleRender) {
             this.value = new AtomicReference<>(initialValue);
@@ -147,10 +162,17 @@ final class HookRuntime {
 
         @Override
         public void set(T nextValue) {
+            if (!active) {
+                return;
+            }
             T previous = value.getAndSet(nextValue);
             if (!Objects.equals(previous, nextValue)) {
                 scheduleRender.run();
             }
+        }
+
+        private void deactivate() {
+            active = false;
         }
     }
 
