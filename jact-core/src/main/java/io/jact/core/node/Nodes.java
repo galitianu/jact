@@ -3,6 +3,7 @@ package io.jact.core.node;
 import io.jact.annotations.JNode;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.Consumer;
 
 public final class Nodes {
@@ -19,6 +20,14 @@ public final class Nodes {
 
     public static TextInputNode input(String value, String placeholder, Consumer<String> onChange) {
         return new TextInputNode(value, placeholder, onChange);
+    }
+
+    public static ComponentNode component(String componentId, Object... arguments) {
+        return new ComponentNode(componentId, Arrays.asList(arguments));
+    }
+
+    public static ComponentNode component(String componentId, List<Object> arguments) {
+        return new ComponentNode(componentId, arguments);
     }
 
     public static KeyedNode key(String key, JNode child) {

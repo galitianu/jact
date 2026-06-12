@@ -123,6 +123,100 @@ class JactRuntimeTest {
     }
 
     @Test
+    void resolvesComponentNodesBeforeRendering() {
+        RuntimeRegistry runtimeRegistry = new RuntimeRegistry() {
+            @Override
+            public List<ComponentDescriptor> components() {
+                return List.of(new ComponentDescriptor("io.jact.sample.Components", "title"));
+            }
+
+            @Override
+            public List<PageDescriptor> pages() {
+                return List.of(new PageDescriptor("/", "io.jact.sample.HomePage", "home"));
+            }
+        };
+
+        AtomicReference<JNode> renderedNode = new AtomicReference<>();
+        RendererBridge rendererBridge = new RendererBridge() {
+            @Override
+            public void ensureStarted() {
+            }
+
+            @Override
+            public void mount(JNode rootNode, WindowSettings windowSettings) {
+                renderedNode.set(rootNode);
+            }
+
+            @Override
+            public void update(JNode rootNode) {
+                renderedNode.set(rootNode);
+            }
+
+            @Override
+            public void executeOnUiThread(Runnable task) {
+                task.run();
+            }
+        };
+
+        JactRuntime runtime = new JactRuntime(runtimeRegistry, rendererBridge);
+        runtime.start();
+        runtime.mountInitialPage(
+            "/",
+            request -> Nodes.component("title", "Dashboard"),
+            request -> Nodes.text(request.arguments().getFirst().toString()),
+            new WindowSettings("demo", 800, 600)
+        );
+
+        assertThat(renderedNode.get()).isEqualTo(new TextNode("Dashboard"));
+    }
+
+    @Test
+    void failsWhenComponentCannotBeResolved() {
+        RuntimeRegistry runtimeRegistry = new RuntimeRegistry() {
+            @Override
+            public List<ComponentDescriptor> components() {
+                return List.of();
+            }
+
+            @Override
+            public List<PageDescriptor> pages() {
+                return List.of(new PageDescriptor("/", "io.jact.sample.HomePage", "home"));
+            }
+        };
+
+        RendererBridge rendererBridge = new RendererBridge() {
+            @Override
+            public void ensureStarted() {
+            }
+
+            @Override
+            public void mount(JNode rootNode, WindowSettings windowSettings) {
+            }
+
+            @Override
+            public void update(JNode rootNode) {
+            }
+
+            @Override
+            public void executeOnUiThread(Runnable task) {
+                task.run();
+            }
+        };
+
+        JactRuntime runtime = new JactRuntime(runtimeRegistry, rendererBridge);
+        runtime.start();
+
+        assertThatThrownBy(() -> runtime.mountInitialPage(
+            "/",
+            request -> Nodes.component("missing"),
+            request -> Nodes.text("unused"),
+            new WindowSettings("demo", 800, 600)
+        ))
+            .isInstanceOf(JactRuntimeException.class)
+            .hasMessageContaining("No component found for id: missing");
+    }
+
+    @Test
     void appliesStateUpdateScheduledFromEffectInSameRenderCycle() {
         RuntimeRegistry runtimeRegistry = new RuntimeRegistry() {
             @Override

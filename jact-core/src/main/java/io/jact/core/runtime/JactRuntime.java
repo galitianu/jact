@@ -4,9 +4,15 @@ import io.jact.annotations.JNode;
 import io.jact.core.api.Navigator;
 import io.jact.core.internal.JactRuntimeException;
 import io.jact.core.meta.PageDescriptor;
+import io.jact.core.meta.ComponentDescriptor;
+import io.jact.core.node.ComponentNode;
+import io.jact.core.node.ContainerNode;
+import io.jact.core.node.KeyedNode;
+import io.jact.core.node.ScrollAreaNode;
 import io.jact.core.registry.RuntimeRegistry;
 import io.jact.core.routing.RouteParams;
 import io.jact.core.routing.RouteTemplate;
+import io.jact.core.runtime.spi.ComponentResolver;
 import io.jact.core.runtime.spi.PageResolver;
 import io.jact.core.runtime.spi.RendererBridge;
 
@@ -30,6 +36,7 @@ public final class JactRuntime {
     private int historyIndex = -1;
 
     private PageResolver pageResolver;
+    private ComponentResolver componentResolver;
     private WindowSettings windowSettings;
     private RouteContext routeContext;
     private boolean mounted;
@@ -50,11 +57,24 @@ public final class JactRuntime {
     }
 
     public void mountInitialPage(String initialRoute, PageResolver pageResolver, WindowSettings windowSettings) {
+        mountInitialPage(initialRoute, pageResolver, request -> {
+            throw new JactRuntimeException("No component resolver configured for component: " + request.componentId());
+        }, windowSettings);
+    }
+
+    public void mountInitialPage(
+        String initialRoute,
+        PageResolver pageResolver,
+        ComponentResolver componentResolver,
+        WindowSettings windowSettings
+    ) {
         Objects.requireNonNull(pageResolver, "pageResolver");
+        Objects.requireNonNull(componentResolver, "componentResolver");
         Objects.requireNonNull(windowSettings, "windowSettings");
 
         synchronized (lifecycleLock) {
             this.pageResolver = pageResolver;
+            this.componentResolver = componentResolver;
             this.windowSettings = windowSettings;
         }
 
@@ -128,17 +148,19 @@ public final class JactRuntime {
     private void renderCurrent() {
         RouteContext context;
         PageResolver resolver;
+        ComponentResolver components;
         WindowSettings settings;
         boolean shouldMount;
 
         synchronized (lifecycleLock) {
             context = routeContext;
             resolver = pageResolver;
+            components = componentResolver;
             settings = windowSettings;
             shouldMount = !mounted;
         }
 
-        if (context == null || resolver == null || settings == null) {
+        if (context == null || resolver == null || components == null || settings == null) {
             throw new JactRuntimeException("Cannot render without route context and initialization settings.");
         }
 
@@ -149,6 +171,7 @@ public final class JactRuntime {
         Runnable postCommit;
         try {
             rootNode = resolver.resolve(new RenderRequest(context.path(), context.pageDescriptor(), context.params(), navigator));
+            rootNode = resolveComponents(rootNode, components, context);
             postCommit = hookRuntime.endRender(renderSession);
         } catch (RuntimeException exception) {
             hookRuntime.abortRender();
@@ -165,6 +188,62 @@ public final class JactRuntime {
         }
 
         postCommit.run();
+    }
+
+    private JNode resolveComponents(JNode node, ComponentResolver resolver, RouteContext routeContext) {
+        Objects.requireNonNull(node, "node");
+
+        if (node instanceof ComponentNode componentNode) {
+            ComponentDescriptor descriptor = resolveComponentDescriptor(componentNode.componentId());
+            JNode resolved = resolver.resolve(new ComponentRequest(
+                componentNode.componentId(),
+                descriptor,
+                componentNode.arguments(),
+                routeContext.path(),
+                routeContext.params(),
+                navigator
+            ));
+            return resolveComponents(resolved, resolver, routeContext);
+        }
+
+        if (node instanceof KeyedNode keyedNode) {
+            return new KeyedNode(keyedNode.key(), resolveComponents(keyedNode.child(), resolver, routeContext));
+        }
+
+        if (node instanceof ContainerNode containerNode) {
+            return new ContainerNode(containerNode.children().stream()
+                .map(child -> resolveComponents(child, resolver, routeContext))
+                .toList());
+        }
+
+        if (node instanceof ScrollAreaNode scrollAreaNode) {
+            return new ScrollAreaNode(resolveComponents(scrollAreaNode.child(), resolver, routeContext));
+        }
+
+        return node;
+    }
+
+    private ComponentDescriptor resolveComponentDescriptor(String componentId) {
+        List<ComponentDescriptor> matches = runtimeRegistry.components().stream()
+            .filter(descriptor -> componentMatches(descriptor, componentId))
+            .toList();
+
+        if (matches.isEmpty()) {
+            throw new JactRuntimeException("No component found for id: " + componentId);
+        }
+        if (matches.size() > 1) {
+            throw new JactRuntimeException("Ambiguous component id '" + componentId + "'. Use beanClass#method.");
+        }
+        return matches.getFirst();
+    }
+
+    private boolean componentMatches(ComponentDescriptor descriptor, String componentId) {
+        String qualifiedId = descriptor.beanClassName() + "#" + descriptor.methodName();
+        String simpleClassName = descriptor.beanClassName().substring(descriptor.beanClassName().lastIndexOf('.') + 1);
+        String simpleQualifiedId = simpleClassName + "#" + descriptor.methodName();
+        return componentId.equals(qualifiedId)
+            || componentId.equals(simpleQualifiedId)
+            || componentId.equals(descriptor.methodName());
     }
 
     private RouteContext resolveRoute(String path) {
