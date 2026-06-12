@@ -10,6 +10,7 @@ import io.jact.core.node.ContainerNode;
 import io.jact.core.node.TextNode;
 import io.jact.core.node.Nodes;
 import io.jact.core.registry.RuntimeRegistry;
+import io.jact.core.routing.RouteParams;
 import io.jact.core.runtime.JactRuntime;
 import io.jact.core.runtime.RenderRequest;
 import io.jact.core.runtime.WindowSettings;
@@ -121,6 +122,60 @@ class JactRuntimeTest {
         assertThat(lastRequest.path()).isEqualTo("/tasks/42");
         assertThat(lastRequest.params().get("id")).isEqualTo("42");
         assertThat(runtime.navigator().currentParams().get("id")).isEqualTo("42");
+    }
+
+    @Test
+    void parsesQueryParamsIntoRouteParams() {
+        RuntimeRegistry runtimeRegistry = new RuntimeRegistry() {
+            @Override
+            public List<ComponentDescriptor> components() {
+                return List.of();
+            }
+
+            @Override
+            public List<PageDescriptor> pages() {
+                return List.of(new PageDescriptor("/tasks/$id", "io.jact.sample.TaskPages", "task"));
+            }
+        };
+
+        CopyOnWriteArrayList<RenderRequest> renderRequests = new CopyOnWriteArrayList<>();
+        JactRuntime runtime = new JactRuntime(runtimeRegistry, noOpRenderer());
+        runtime.start();
+        runtime.mountInitialPage("/tasks/42?filter=open&done=true", request -> {
+            renderRequests.add(request);
+            return Nodes.text("ok");
+        }, new WindowSettings("demo", 800, 600));
+
+        RouteParams params = renderRequests.getFirst().params();
+        assertThat(params.getLong("id")).isEqualTo(42L);
+        assertThat(params.get("filter")).isEqualTo("open");
+        assertThat(params.getBoolean("done")).isTrue();
+    }
+
+    @Test
+    void usesNotFoundRouteWhenPresent() {
+        RuntimeRegistry runtimeRegistry = new RuntimeRegistry() {
+            @Override
+            public List<ComponentDescriptor> components() {
+                return List.of();
+            }
+
+            @Override
+            public List<PageDescriptor> pages() {
+                return List.of(new PageDescriptor("/404", "io.jact.sample.NotFoundPage", "notFound"));
+            }
+        };
+
+        AtomicReference<RenderRequest> renderRequest = new AtomicReference<>();
+        JactRuntime runtime = new JactRuntime(runtimeRegistry, noOpRenderer());
+        runtime.start();
+        runtime.mountInitialPage("/missing", request -> {
+            renderRequest.set(request);
+            return Nodes.text("missing");
+        }, new WindowSettings("demo", 800, 600));
+
+        assertThat(renderRequest.get().descriptor().routeTemplate()).isEqualTo("/404");
+        assertThat(renderRequest.get().params().get("unmatchedPath")).isEqualTo("/missing");
     }
 
     @Test

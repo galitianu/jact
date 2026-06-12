@@ -26,6 +26,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 
 public final class JactRuntime {
     private final RuntimeRegistry runtimeRegistry;
@@ -130,8 +132,9 @@ public final class JactRuntime {
                 throw new JactRuntimeException("JACT runtime is not initialized. Call mountInitialPage() first.");
             }
 
-            String normalizedPath = RouteTemplate.normalizePath(rawPath);
-            next = resolveRoute(normalizedPath);
+            RouteTarget target = parseRouteTarget(rawPath);
+            String normalizedPath = target.path();
+            next = resolveRoute(target);
             previous = routeContext;
             routeContext = next;
 
@@ -355,8 +358,9 @@ public final class JactRuntime {
             || componentId.equals(descriptor.methodName());
     }
 
-    private RouteContext resolveRoute(String path) {
+    private RouteContext resolveRoute(RouteTarget target) {
         RouteMatch bestMatch = null;
+        String path = target.path();
         for (PageDescriptor descriptor : runtimeRegistry.pages()) {
             RouteMatch candidate = match(descriptor, path);
             if (candidate == null) {
@@ -369,10 +373,66 @@ public final class JactRuntime {
         }
 
         if (bestMatch == null) {
-            throw new JactRuntimeException("No page found for route: " + path);
+            if (!"/404".equals(path)) {
+                RouteMatch notFound = findNotFoundRoute();
+                if (notFound != null) {
+                    Map<String, String> notFoundParams = new LinkedHashMap<>(target.queryParams());
+                    notFoundParams.put("unmatchedPath", path);
+                    return new RouteContext(path, notFound.pageDescriptor(), RouteParams.of(notFoundParams));
+                }
+            }
+            throw new JactRuntimeException("No page found for route: " + path + ". Available routes: " + availableRoutes());
         }
 
-        return new RouteContext(path, bestMatch.pageDescriptor(), RouteParams.of(bestMatch.params()));
+        Map<String, String> params = new LinkedHashMap<>(target.queryParams());
+        params.putAll(bestMatch.params());
+        return new RouteContext(path, bestMatch.pageDescriptor(), RouteParams.of(params));
+    }
+
+    private RouteMatch findNotFoundRoute() {
+        for (PageDescriptor descriptor : runtimeRegistry.pages()) {
+            RouteMatch match = match(descriptor, "/404");
+            if (match != null) {
+                return match;
+            }
+        }
+        return null;
+    }
+
+    private List<String> availableRoutes() {
+        return runtimeRegistry.pages().stream()
+            .map(PageDescriptor::routeTemplate)
+            .toList();
+    }
+
+    private RouteTarget parseRouteTarget(String rawPath) {
+        String value = rawPath == null ? "/" : rawPath.trim();
+        int queryStart = value.indexOf('?');
+        String path = queryStart >= 0 ? value.substring(0, queryStart) : value;
+        String query = queryStart >= 0 ? value.substring(queryStart + 1) : "";
+        return new RouteTarget(RouteTemplate.normalizePath(path), parseQueryParams(query));
+    }
+
+    private Map<String, String> parseQueryParams(String query) {
+        if (query == null || query.isBlank()) {
+            return Map.of();
+        }
+
+        Map<String, String> params = new LinkedHashMap<>();
+        for (String pair : query.split("&")) {
+            if (pair.isBlank()) {
+                continue;
+            }
+            int separator = pair.indexOf('=');
+            String rawKey = separator >= 0 ? pair.substring(0, separator) : pair;
+            String rawValue = separator >= 0 ? pair.substring(separator + 1) : "";
+            params.put(decodeQueryValue(rawKey), decodeQueryValue(rawValue));
+        }
+        return params;
+    }
+
+    private String decodeQueryValue(String value) {
+        return URLDecoder.decode(value, StandardCharsets.UTF_8);
     }
 
     private RouteMatch match(PageDescriptor descriptor, String concretePath) {
@@ -435,6 +495,9 @@ public final class JactRuntime {
     }
 
     private record RouteMatch(PageDescriptor pageDescriptor, Map<String, String> params, int staticSegmentCount) {
+    }
+
+    private record RouteTarget(String path, Map<String, String> queryParams) {
     }
 
     private final class RuntimeNavigator implements Navigator {
