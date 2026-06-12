@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<HBox spacing="16" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="io.jact.baseline.TaskManagerController">
+    <padding>
+        <Insets top="16" right="16" bottom="16" left="16"/>
+    </padding>
+    <VBox spacing="10" prefWidth="560">
+        <Label text="JavaFX MVC/FXML Task Manager Baseline"/>
+        <TextField fx:id="searchField" promptText="Search tasks by title"/>
+        <HBox spacing="8">
+            <ComboBox fx:id="filterBox"/>
+            <CheckBox fx:id="descendingBox" text="Latest first"/>
+        </HBox>
+        <HBox spacing="8">
+            <TextField fx:id="newTaskField" promptText="Task title"/>
+            <Button text="Create" onAction="#createTask"/>
+        </HBox>
+        <ListView fx:id="taskList" prefHeight="460"/>
+    </VBox>
+    <VBox fx:id="detailPane" spacing="10" prefWidth="320">
+        <Label fx:id="detailTitle" text="No task selected"/>
+        <TextField fx:id="editTitleField" promptText="Edit title"/>
+        <CheckBox fx:id="detailCompletedBox" text="Completed"/>
+        <HBox spacing="8">
+            <Button text="Save" onAction="#saveSelectedTask"/>
+            <Button text="Delete" onAction="#deleteSelectedTask"/>
+        </HBox>
+    </VBox>
+</HBox>

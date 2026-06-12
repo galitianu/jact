@@ -6,5 +6,6 @@ include(
     "jact-compiler",
     "jact-javafx",
     "jact-spring-boot-starter",
-    "samples-task-manager"
+    "samples-task-manager",
+    "samples-task-manager-javafx-baseline"
 )
