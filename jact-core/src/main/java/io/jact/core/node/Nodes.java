@@ -22,6 +22,14 @@ public final class Nodes {
         return new TextInputNode(value, placeholder, onChange);
     }
 
+    public static CheckboxNode checkbox(String label, boolean checked, Consumer<Boolean> onChange) {
+        return new CheckboxNode(label, checked, onChange);
+    }
+
+    public static SelectNode select(String value, List<String> options, Consumer<String> onChange) {
+        return new SelectNode(value, options, onChange);
+    }
+
     public static ComponentNode component(String componentId, Object... arguments) {
         return new ComponentNode(componentId, Arrays.asList(arguments));
     }
@@ -40,5 +48,17 @@ public final class Nodes {
 
     public static ContainerNode column(JNode... children) {
         return new ContainerNode(Arrays.asList(children));
+    }
+
+    public static RowNode row(JNode... children) {
+        return new RowNode(Arrays.asList(children));
+    }
+
+    public static SpacerNode spacer() {
+        return new SpacerNode();
+    }
+
+    public static DividerNode divider() {
+        return new DividerNode();
     }
 }

@@ -8,6 +8,7 @@ import io.jact.core.meta.ComponentDescriptor;
 import io.jact.core.node.ComponentNode;
 import io.jact.core.node.ContainerNode;
 import io.jact.core.node.KeyedNode;
+import io.jact.core.node.RowNode;
 import io.jact.core.node.ScrollAreaNode;
 import io.jact.core.registry.RuntimeRegistry;
 import io.jact.core.routing.RouteParams;
@@ -268,6 +269,22 @@ public final class JactRuntime {
                 ));
             }
             return new ContainerNode(children);
+        }
+
+        if (node instanceof RowNode rowNode) {
+            List<JNode> children = new ArrayList<>(rowNode.children().size());
+            for (int i = 0; i < rowNode.children().size(); i++) {
+                children.add(resolveComponents(
+                    rowNode.children().get(i),
+                    resolver,
+                    routeContext,
+                    parentIdentity,
+                    "row-index:" + i,
+                    activeIdentities,
+                    postCommitTasks
+                ));
+            }
+            return new RowNode(children);
         }
 
         if (node instanceof ScrollAreaNode scrollAreaNode) {

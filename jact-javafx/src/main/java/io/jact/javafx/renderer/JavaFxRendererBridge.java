@@ -3,21 +3,33 @@ package io.jact.javafx.renderer;
 import io.jact.annotations.JNode;
 import io.jact.core.internal.JactRuntimeException;
 import io.jact.core.node.ButtonNode;
+import io.jact.core.node.CheckboxNode;
 import io.jact.core.node.ContainerNode;
+import io.jact.core.node.DividerNode;
 import io.jact.core.node.KeyedNode;
+import io.jact.core.node.RowNode;
 import io.jact.core.node.ScrollAreaNode;
+import io.jact.core.node.SelectNode;
+import io.jact.core.node.SpacerNode;
 import io.jact.core.node.TextInputNode;
 import io.jact.core.node.TextNode;
+import javafx.collections.ObservableList;
 import io.jact.core.runtime.WindowSettings;
 import io.jact.core.runtime.spi.RendererBridge;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.IndexRange;
 import javafx.scene.control.Label;
+import javafx.scene.control.Separator;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -166,8 +178,44 @@ public final class JavaFxRendererBridge implements RendererBridge {
                 patchInputValue(current, textField, value);
                 return current;
             }
+            case CheckboxNode(String label, boolean checked, Consumer<Boolean> onChange) -> {
+                CheckBox checkBox = (CheckBox) current.fxNode;
+                if (!label.equals(checkBox.getText())) {
+                    checkBox.setText(label);
+                }
+                current.checkboxChange = onChange;
+                if (checkBox.isSelected() != checked) {
+                    current.syncingCheckbox = true;
+                    try {
+                        checkBox.setSelected(checked);
+                    } finally {
+                        current.syncingCheckbox = false;
+                    }
+                }
+                return current;
+            }
+            case SelectNode(String value, List<String> options, Consumer<String> onChange) -> {
+                ComboBox<String> comboBox = typedComboBox(current.fxNode);
+                current.selectChange = onChange;
+                if (!comboBox.getItems().equals(options)) {
+                    comboBox.getItems().setAll(options);
+                }
+                if (!value.equals(comboBox.getValue())) {
+                    current.syncingSelect = true;
+                    try {
+                        comboBox.setValue(value);
+                    } finally {
+                        current.syncingSelect = false;
+                    }
+                }
+                return current;
+            }
             case ContainerNode(List<JNode> children) -> {
-                reconcileContainer(current, children);
+                reconcileLinearContainer(current, children, ((VBox) current.fxNode).getChildren());
+                return current;
+            }
+            case RowNode(List<JNode> children) -> {
+                reconcileLinearContainer(current, children, ((HBox) current.fxNode).getChildren());
                 return current;
             }
             case ScrollAreaNode(JNode child) -> {
@@ -186,6 +234,12 @@ public final class JavaFxRendererBridge implements RendererBridge {
                 if (scrollPane.getContent() != nextRenderedChild.fxNode) {
                     scrollPane.setContent(nextRenderedChild.fxNode);
                 }
+                return current;
+            }
+            case SpacerNode ignored -> {
+                return current;
+            }
+            case DividerNode ignored -> {
                 return current;
             }
             default -> throw unsupportedNode(next.node());
@@ -226,8 +280,7 @@ public final class JavaFxRendererBridge implements RendererBridge {
         }
     }
 
-    private void reconcileContainer(RenderedNode containerHolder, List<JNode> nextChildrenRaw) {
-        VBox vBox = (VBox) containerHolder.fxNode;
+    private void reconcileLinearContainer(RenderedNode containerHolder, List<JNode> nextChildrenRaw, ObservableList<Node> fxChildren) {
         List<RenderedNode> previousChildren = containerHolder.children;
         List<NodeSpec> nextChildren = normalizeChildren(nextChildrenRaw);
 
@@ -272,8 +325,8 @@ public final class JavaFxRendererBridge implements RendererBridge {
 
         containerHolder.children = merged;
         List<Node> expectedOrder = merged.stream().map(child -> child.fxNode).toList();
-        if (!sameOrder(vBox.getChildren(), expectedOrder)) {
-            vBox.getChildren().setAll(expectedOrder);
+        if (!sameOrder(fxChildren, expectedOrder)) {
+            fxChildren.setAll(expectedOrder);
         }
     }
 
@@ -331,6 +384,31 @@ public final class JavaFxRendererBridge implements RendererBridge {
                 });
                 yield rendered;
             }
+            case CheckboxNode(String label, boolean checked, Consumer<Boolean> onChange) -> {
+                CheckBox checkBox = new CheckBox(label);
+                checkBox.setSelected(checked);
+                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.CHECKBOX, checkBox);
+                rendered.checkboxChange = onChange;
+                checkBox.selectedProperty().addListener((observable, oldValue, newValue) -> {
+                    if (!rendered.syncingCheckbox && rendered.checkboxChange != null) {
+                        rendered.checkboxChange.accept(newValue);
+                    }
+                });
+                yield rendered;
+            }
+            case SelectNode(String value, List<String> options, Consumer<String> onChange) -> {
+                ComboBox<String> comboBox = new ComboBox<>();
+                comboBox.getItems().setAll(options);
+                comboBox.setValue(value);
+                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.SELECT, comboBox);
+                rendered.selectChange = onChange;
+                comboBox.valueProperty().addListener((observable, oldValue, newValue) -> {
+                    if (!rendered.syncingSelect && rendered.selectChange != null) {
+                        rendered.selectChange.accept(newValue);
+                    }
+                });
+                yield rendered;
+            }
             case ContainerNode(List<JNode> children) -> {
                 VBox vBox = new VBox(8);
                 RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.CONTAINER, vBox);
@@ -339,6 +417,18 @@ public final class JavaFxRendererBridge implements RendererBridge {
                     RenderedNode childRendered = createRenderedNode(childSpec);
                     childNodes.add(childRendered);
                     vBox.getChildren().add(childRendered.fxNode);
+                }
+                rendered.children = childNodes;
+                yield rendered;
+            }
+            case RowNode(List<JNode> children) -> {
+                HBox hBox = new HBox(8);
+                RenderedNode rendered = new RenderedNode(spec.key(), NodeKind.ROW, hBox);
+                List<RenderedNode> childNodes = new ArrayList<>(children.size());
+                for (NodeSpec childSpec : normalizeChildren(children)) {
+                    RenderedNode childRendered = createRenderedNode(childSpec);
+                    childNodes.add(childRendered);
+                    hBox.getChildren().add(childRendered.fxNode);
                 }
                 rendered.children = childNodes;
                 yield rendered;
@@ -359,8 +449,20 @@ public final class JavaFxRendererBridge implements RendererBridge {
                 rendered.children = List.of(childRendered);
                 yield rendered;
             }
+            case SpacerNode ignored -> {
+                Region spacer = new Region();
+                HBox.setHgrow(spacer, Priority.ALWAYS);
+                VBox.setVgrow(spacer, Priority.ALWAYS);
+                yield new RenderedNode(spec.key(), NodeKind.SPACER, spacer);
+            }
+            case DividerNode ignored -> new RenderedNode(spec.key(), NodeKind.DIVIDER, new Separator());
             default -> throw unsupportedNode(spec.node());
         };
+    }
+
+    @SuppressWarnings("unchecked")
+    private ComboBox<String> typedComboBox(Node node) {
+        return (ComboBox<String>) node;
     }
 
     private NodeSpec normalize(JNode node) {
@@ -383,11 +485,26 @@ public final class JavaFxRendererBridge implements RendererBridge {
         if (node instanceof TextInputNode) {
             return NodeKind.INPUT;
         }
+        if (node instanceof CheckboxNode) {
+            return NodeKind.CHECKBOX;
+        }
+        if (node instanceof SelectNode) {
+            return NodeKind.SELECT;
+        }
         if (node instanceof ContainerNode) {
             return NodeKind.CONTAINER;
         }
+        if (node instanceof RowNode) {
+            return NodeKind.ROW;
+        }
         if (node instanceof ScrollAreaNode) {
             return NodeKind.SCROLL_AREA;
+        }
+        if (node instanceof SpacerNode) {
+            return NodeKind.SPACER;
+        }
+        if (node instanceof DividerNode) {
+            return NodeKind.DIVIDER;
         }
         throw unsupportedNode(node);
     }
@@ -400,8 +517,13 @@ public final class JavaFxRendererBridge implements RendererBridge {
         TEXT,
         BUTTON,
         INPUT,
+        CHECKBOX,
+        SELECT,
         CONTAINER,
-        SCROLL_AREA
+        ROW,
+        SCROLL_AREA,
+        SPACER,
+        DIVIDER
     }
 
     private record NodeSpec(String key, JNode node) {
@@ -414,7 +536,11 @@ public final class JavaFxRendererBridge implements RendererBridge {
         private List<RenderedNode> children = List.of();
         private Runnable buttonClick;
         private Consumer<String> inputChange;
+        private Consumer<Boolean> checkboxChange;
+        private Consumer<String> selectChange;
         private boolean syncingInput;
+        private boolean syncingCheckbox;
+        private boolean syncingSelect;
 
         private RenderedNode(String key, NodeKind kind, Node fxNode) {
             this.key = key;
