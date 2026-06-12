@@ -13,14 +13,24 @@ class GeneratedRuntimeRegistryTest {
         assertThat(registry.components())
             .hasSize(1)
             .first()
-            .extracting("beanClassName", "methodName")
-            .containsExactly("io.jact.sample.SampleComponents", "header");
+            .extracting("componentId", "beanClassName", "methodName", "parameterTypeNames")
+            .containsExactly(
+                "io.jact.sample.SampleComponents#header",
+                "io.jact.sample.SampleComponents",
+                "header",
+                java.util.List.of("java.lang.String")
+            );
 
         assertThat(registry.pages())
             .hasSize(1)
             .first()
-            .extracting("routeTemplate", "beanClassName", "methodName")
-            .containsExactly("/", "io.jact.sample.SamplePages", "home");
+            .extracting("routeTemplate", "beanClassName", "methodName", "parameterTypeNames")
+            .containsExactly(
+                "/",
+                "io.jact.sample.SamplePages",
+                "home",
+                java.util.List.of("io.jact.core.routing.RouteParams")
+            );
     }
 
     @Test

@@ -303,7 +303,8 @@ public final class JactRuntime {
         String qualifiedId = descriptor.beanClassName() + "#" + descriptor.methodName();
         String simpleClassName = descriptor.beanClassName().substring(descriptor.beanClassName().lastIndexOf('.') + 1);
         String simpleQualifiedId = simpleClassName + "#" + descriptor.methodName();
-        return componentId.equals(qualifiedId)
+        return componentId.equals(descriptor.componentId())
+            || componentId.equals(qualifiedId)
             || componentId.equals(simpleQualifiedId)
             || componentId.equals(descriptor.methodName());
     }

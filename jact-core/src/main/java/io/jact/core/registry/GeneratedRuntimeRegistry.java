@@ -47,7 +47,11 @@ public final class GeneratedRuntimeRegistry implements RuntimeRegistry {
             if (entry.length < 2) {
                 continue;
             }
-            descriptors.add(new ComponentDescriptor(entry[0], entry[1]));
+            if (entry.length >= 4) {
+                descriptors.add(new ComponentDescriptor(entry[0], entry[1], entry[2], splitParameterTypes(entry[3])));
+            } else {
+                descriptors.add(new ComponentDescriptor(entry[0], entry[1]));
+            }
         }
         return descriptors;
     }
@@ -63,7 +67,11 @@ public final class GeneratedRuntimeRegistry implements RuntimeRegistry {
             if (entry.length < 3) {
                 continue;
             }
-            descriptors.add(new PageDescriptor(entry[0], entry[1], entry[2]));
+            if (entry.length >= 4) {
+                descriptors.add(new PageDescriptor(entry[0], entry[1], entry[2], splitParameterTypes(entry[3])));
+            } else {
+                descriptors.add(new PageDescriptor(entry[0], entry[1], entry[2]));
+            }
         }
         return descriptors;
     }
@@ -92,5 +100,12 @@ public final class GeneratedRuntimeRegistry implements RuntimeRegistry {
         } catch (IllegalAccessException | InvocationTargetException exception) {
             throw new JactRuntimeException("Could not read generated registry: " + className, exception);
         }
+    }
+
+    private static List<String> splitParameterTypes(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return List.of();
+        }
+        return List.of(rawValue.split(","));
     }
 }

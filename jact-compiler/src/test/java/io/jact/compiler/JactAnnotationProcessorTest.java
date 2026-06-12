@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JactAnnotationProcessorTest {
     @Test
-    void generatesRegistriesForValidAnnotations() {
+    void generatesRegistriesForValidAnnotations() throws Exception {
         JavaFileObject page = forSourceString("io.jact.sample.HomePage", """
             package io.jact.sample;
 
@@ -22,7 +22,7 @@ class JactAnnotationProcessorTest {
 
             public class HomePage {
               @JactPage(path = "/")
-              public JNode home() {
+              public JNode home(String title) {
                 return new JNode() {};
               }
             }
@@ -36,7 +36,7 @@ class JactAnnotationProcessorTest {
 
             public class LayoutComponents {
               @JactComponent
-              public JNode header() {
+              public JNode header(String title) {
                 return new JNode() {};
               }
             }
@@ -47,8 +47,16 @@ class JactAnnotationProcessorTest {
             .compile(page, component);
 
         assertThat(compilation).succeeded();
-        assertThat(compilation).generatedSourceFile("io.jact.generated.GeneratedPageRegistry");
-        assertThat(compilation).generatedSourceFile("io.jact.generated.GeneratedComponentRegistry");
+        JavaFileObject generatedPages = compilation.generatedSourceFile("io.jact.generated.GeneratedPageRegistry")
+            .orElseThrow();
+        JavaFileObject generatedComponents = compilation.generatedSourceFile("io.jact.generated.GeneratedComponentRegistry")
+            .orElseThrow();
+        assertTrue(generatedPages.getCharContent(false).toString().contains(
+            "{\"/\", \"io.jact.sample.HomePage\", \"home\", \"java.lang.String\"}"
+        ));
+        assertTrue(generatedComponents.getCharContent(false).toString().contains(
+            "{\"io.jact.sample.LayoutComponents#header\", \"io.jact.sample.LayoutComponents\", \"header\", \"java.lang.String\"}"
+        ));
     }
 
     @Test
@@ -110,6 +118,59 @@ class JactAnnotationProcessorTest {
 
         assertThat(compilation).failed();
         assertThat(compilation).hadErrorContaining("Duplicate page route pattern '/same'");
+    }
+
+    @Test
+    void failsOnDuplicateComponentIdsFromOverloads() {
+        JavaFileObject components = forSourceString("io.jact.sample.Components", """
+            package io.jact.sample;
+
+            import io.jact.annotations.JNode;
+            import io.jact.annotations.JactComponent;
+
+            public class Components {
+              @JactComponent
+              public JNode item(String value) {
+                return new JNode() {};
+              }
+
+              @JactComponent
+              public JNode item(Integer value) {
+                return new JNode() {};
+              }
+            }
+            """);
+
+        Compilation compilation = Compiler.javac()
+            .withProcessors(new JactAnnotationProcessor())
+            .compile(components);
+
+        assertThat(compilation).failed();
+        assertThat(compilation).hadErrorContaining("Duplicate component id 'io.jact.sample.Components#item'");
+    }
+
+    @Test
+    void failsWhenAnnotatedMethodIsStatic() {
+        JavaFileObject invalidPage = forSourceString("io.jact.sample.InvalidPage", """
+            package io.jact.sample;
+
+            import io.jact.annotations.JNode;
+            import io.jact.annotations.JactPage;
+
+            public class InvalidPage {
+              @JactPage
+              public static JNode home() {
+                return new JNode() {};
+              }
+            }
+            """);
+
+        Compilation compilation = Compiler.javac()
+            .withProcessors(new JactAnnotationProcessor())
+            .compile(invalidPage);
+
+        assertThat(compilation).failed();
+        assertThat(compilation).hadErrorContaining("@JactPage methods must not be static.");
     }
 
     @Test

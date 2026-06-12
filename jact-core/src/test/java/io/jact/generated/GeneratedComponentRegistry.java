@@ -6,7 +6,7 @@ public final class GeneratedComponentRegistry {
 
     public static String[][] entries() {
         return new String[][] {
-            {"io.jact.sample.SampleComponents", "header"}
+            {"io.jact.sample.SampleComponents#header", "io.jact.sample.SampleComponents", "header", "java.lang.String"}
         };
     }
 }

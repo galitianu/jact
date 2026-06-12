@@ -34,6 +34,7 @@ import java.util.Set;
 public final class JactAnnotationProcessor extends AbstractProcessor {
     private final List<ComponentEntry> componentEntries = new ArrayList<>();
     private final List<PageEntry> pageEntries = new ArrayList<>();
+    private final Map<String, Element> componentIds = new HashMap<>();
     private final Map<String, Element> routeSignatures = new HashMap<>();
     private boolean generated;
 
@@ -98,7 +99,16 @@ public final class JactAnnotationProcessor extends AbstractProcessor {
         }
 
         String owner = ((TypeElement) executableElement.getEnclosingElement()).getQualifiedName().toString();
-        componentEntries.add(new ComponentEntry(owner, executableElement.getSimpleName().toString()));
+        String methodName = executableElement.getSimpleName().toString();
+        String componentId = owner + "#" + methodName;
+        Element previousElement = componentIds.putIfAbsent(componentId, executableElement);
+        if (previousElement != null) {
+            error(executableElement, "Duplicate component id '%s'. Overloaded @JactComponent methods are not supported.", componentId);
+            error(previousElement, "Conflicting component id already declared here.");
+            return;
+        }
+
+        componentEntries.add(new ComponentEntry(componentId, owner, methodName, parameterTypeNames(executableElement)));
     }
 
     private void collectPage(Element element) {
@@ -127,7 +137,7 @@ public final class JactAnnotationProcessor extends AbstractProcessor {
         }
 
         String owner = ((TypeElement) executableElement.getEnclosingElement()).getQualifiedName().toString();
-        pageEntries.add(new PageEntry(route, owner, executableElement.getSimpleName().toString()));
+        pageEntries.add(new PageEntry(route, owner, executableElement.getSimpleName().toString(), parameterTypeNames(executableElement)));
     }
 
     private boolean validateCommonMethodRules(ExecutableElement executableElement, String annotationName) {
@@ -138,6 +148,11 @@ public final class JactAnnotationProcessor extends AbstractProcessor {
 
         if (!executableElement.getModifiers().contains(Modifier.PUBLIC)) {
             error(executableElement, "%s methods must be public.", annotationName);
+            return false;
+        }
+
+        if (executableElement.getModifiers().contains(Modifier.STATIC)) {
+            error(executableElement, "%s methods must not be static.", annotationName);
             return false;
         }
 
@@ -152,6 +167,12 @@ public final class JactAnnotationProcessor extends AbstractProcessor {
         }
 
         return true;
+    }
+
+    private List<String> parameterTypeNames(ExecutableElement executableElement) {
+        return executableElement.getParameters().stream()
+            .map(parameter -> parameter.asType().toString())
+            .toList();
     }
 
     private String deriveRoute(ExecutableElement executableElement) {
@@ -253,7 +274,7 @@ public final class JactAnnotationProcessor extends AbstractProcessor {
 
     private void writeComponentRegistry() {
         List<ComponentEntry> sorted = componentEntries.stream()
-            .sorted(Comparator.comparing(ComponentEntry::ownerClass).thenComparing(ComponentEntry::methodName))
+            .sorted(Comparator.comparing(ComponentEntry::componentId))
             .toList();
 
         StringBuilder source = new StringBuilder();
@@ -266,9 +287,13 @@ public final class JactAnnotationProcessor extends AbstractProcessor {
         for (int i = 0; i < sorted.size(); i++) {
             ComponentEntry entry = sorted.get(i);
             source.append("      {\"")
+                .append(escape(entry.componentId()))
+                .append("\", \"")
                 .append(escape(entry.ownerClass()))
                 .append("\", \"")
                 .append(escape(entry.methodName()))
+                .append("\", \"")
+                .append(escape(String.join(",", entry.parameterTypeNames())))
                 .append("\"}");
             if (i < sorted.size() - 1) {
                 source.append(",");
@@ -303,6 +328,8 @@ public final class JactAnnotationProcessor extends AbstractProcessor {
                 .append(escape(entry.ownerClass()))
                 .append("\", \"")
                 .append(escape(entry.methodName()))
+                .append("\", \"")
+                .append(escape(String.join(",", entry.parameterTypeNames())))
                 .append("\"}");
             if (i < sorted.size() - 1) {
                 source.append(",");
@@ -341,9 +368,9 @@ public final class JactAnnotationProcessor extends AbstractProcessor {
         messager.printMessage(Diagnostic.Kind.ERROR, formatted, element);
     }
 
-    private record ComponentEntry(String ownerClass, String methodName) {
+    private record ComponentEntry(String componentId, String ownerClass, String methodName, List<String> parameterTypeNames) {
     }
 
-    private record PageEntry(String route, String ownerClass, String methodName) {
+    private record PageEntry(String route, String ownerClass, String methodName, List<String> parameterTypeNames) {
     }
 }

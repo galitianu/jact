@@ -6,7 +6,7 @@ public final class GeneratedPageRegistry {
 
     public static String[][] entries() {
         return new String[][] {
-            {"/", "io.jact.sample.SamplePages", "home"}
+            {"/", "io.jact.sample.SamplePages", "home", "io.jact.core.routing.RouteParams"}
         };
     }
 }
