@@ -1,16 +1,17 @@
 # Jact
 
-**Jact** (read: **jay-act**) is an in-progress Java framework for building **reactive desktop UI** on top of **Spring** applications.
+**Jact** (read: **jay-act**) is a thesis-oriented Java framework for building **reactive desktop UI** on top of **Spring** applications.
 
 The goal is to make desktop UI development feel closer to a component-driven workflow, with automatic UI updates when state changes.
 
 ## Project Status
 
-Jact is currently in the **planning and architecture phase** (pre-alpha).
+Jact is currently a **thesis MVP**. It includes the core reactive runtime, annotation processing, Spring Boot starter integration, JavaFX rendering, a JACT Task Manager sample, and a JavaFX MVC/FXML baseline for evaluation.
 
 - Repository website: [jact.io](https://jact.io)
 - Organization: **146 Industries**
-- Active planning document: [Implementation Plan](./implementation-plan.md)
+- Implementation notes: [Thesis Implementation Notes](./docs/thesis-implementation-notes.md)
+- Evaluation package: [evaluation](./evaluation)
 
 ## Vision
 
@@ -29,15 +30,16 @@ Jact is designed to reduce that split by introducing a reactive component model 
 
 ## Current Scope (v1)
 
-The current v1 direction focuses on:
+The current thesis MVP focuses on:
 
 - Java 21 + Spring Boot 3.x baseline
 - JavaFX renderer with direct binding updates (no virtual DOM)
 - `@JactComponent` and `@JactPage` annotations
 - Compile-time annotation processing for discovery and validation
 - A Task Manager reference app for end-to-end validation
+- A JavaFX MVC/FXML baseline for comparison
 
-For full details and milestone dates, see [implementation-plan.md](./implementation-plan.md).
+For the original milestone plan, see [implementation-plan.md](./implementation-plan.md).
 
 ## 3-Month Roadmap Snapshot
 
@@ -50,8 +52,8 @@ Target planning window: **March 16, 2026 - June 16, 2026**
 
 ## Thesis Context
 
-This project is also the practical foundation for my master thesis.
-The thesis will document architecture decisions, implementation, and comparative evaluation against a JavaFX MVC + FXML baseline.
+This project is the practical foundation for the master thesis **PROIECTAREA SI IMPLEMENTAREA UNUI FRAMEWORK REACTIV PENTRU INTERFETE DESKTOP JAVA**.
+The thesis documents architecture decisions, implementation, limitations, and comparative evaluation against a JavaFX MVC/FXML baseline.
 
 ## License
 
