@@ -4,7 +4,6 @@ import io.jact.annotations.JNode;
 import io.jact.annotations.JactPage;
 import io.jact.core.api.Hooks;
 import io.jact.core.api.Navigator;
-import io.jact.core.api.State;
 import io.jact.core.node.Nodes;
 import io.jact.core.routing.RouteParams;
 import io.jact.sample.tasks.TaskService;
@@ -41,30 +40,6 @@ public class TaskDetailPage {
         }
 
         TaskView task = taskOptional.get();
-        State<String> editTitle = Hooks.useState(task.title());
-
-        return Nodes.column(
-            Nodes.text("Task details"),
-            Nodes.text("Task id: " + task.id()),
-            Nodes.text("Status: " + (task.completed() ? "DONE" : "OPEN")),
-            Nodes.input(editTitle.get(), "Edit title", editTitle::set),
-            Nodes.button("Save title", () -> {
-                String newValue = editTitle.get().trim();
-                if (!newValue.isEmpty()) {
-                    taskService.updateTitle(task.id(), newValue);
-                }
-            }),
-            Nodes.button(task.completed() ? "Mark Open" : "Mark Done", () -> taskService.toggleCompleted(task.id())),
-            Nodes.button("Delete task", () -> {
-                taskService.delete(task.id());
-                navigator.replace("/");
-            }),
-            Nodes.button("Back", () -> {
-                if (!navigator.back()) {
-                    navigator.replace("/");
-                }
-            }),
-            Nodes.text("Current route: " + navigator.currentPath())
-        );
+        return Nodes.component("taskDetailForm", task);
     }
 }
