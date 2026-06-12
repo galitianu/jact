@@ -60,6 +60,19 @@ public final class JactRuntime {
         return navigator;
     }
 
+    public void shutdown() {
+        synchronized (lifecycleLock) {
+            mounted = false;
+            routeContext = null;
+            pageResolver = null;
+            componentResolver = null;
+            windowSettings = null;
+            navigationHistory.clear();
+            historyIndex = -1;
+        }
+        hookRuntime.unmountAll();
+    }
+
     public void mountInitialPage(String initialRoute, PageResolver pageResolver, WindowSettings windowSettings) {
         mountInitialPage(initialRoute, pageResolver, request -> {
             throw new JactRuntimeException("No component resolver configured for component: " + request.componentId());

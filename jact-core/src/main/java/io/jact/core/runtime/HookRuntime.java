@@ -57,8 +57,7 @@ final class HookRuntime {
                     stateSlot.handle.deactivate();
                 }
                 if (slot instanceof EffectSlot effectSlot && effectSlot.cleanup != null) {
-                    effectSlot.cleanup.run();
-                    effectSlot.cleanup = null;
+                    runCleanup(effectSlot);
                 }
                 if (slot instanceof SubscriptionSlot subscriptionSlot) {
                     subscriptionSlot.dispose();
@@ -73,6 +72,22 @@ final class HookRuntime {
             if (!active.contains(existingKey)) {
                 unmount(existingKey);
             }
+        }
+    }
+
+    void unmountAll() {
+        for (String existingKey : List.copyOf(componentStates.keySet())) {
+            unmount(existingKey);
+        }
+    }
+
+    private static void runCleanup(EffectSlot effectSlot) {
+        try {
+            effectSlot.cleanup.run();
+        } catch (RuntimeException exception) {
+            throw new JactRuntimeException("JACT effect cleanup failed.", exception);
+        } finally {
+            effectSlot.cleanup = null;
         }
     }
 
@@ -240,11 +255,14 @@ final class HookRuntime {
                 if (shouldRun) {
                     postCommitEffects.add(() -> {
                         if (effectSlot.cleanup != null) {
-                            effectSlot.cleanup.run();
-                            effectSlot.cleanup = null;
+                            runCleanup(effectSlot);
                         }
-                        Hooks.Cleanup cleanup = effectSlot.effect.run();
-                        effectSlot.cleanup = cleanup;
+                        try {
+                            Hooks.Cleanup cleanup = effectSlot.effect.run();
+                            effectSlot.cleanup = cleanup;
+                        } catch (RuntimeException exception) {
+                            throw new JactRuntimeException("JACT effect failed.", exception);
+                        }
                     });
                 }
             }

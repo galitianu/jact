@@ -346,6 +346,67 @@ class JactRuntimeTest {
     }
 
     @Test
+    void shutdownRunsEffectCleanupAndDeactivatesState() {
+        RuntimeRegistry runtimeRegistry = new RuntimeRegistry() {
+            @Override
+            public List<ComponentDescriptor> components() {
+                return List.of();
+            }
+
+            @Override
+            public List<PageDescriptor> pages() {
+                return List.of(new PageDescriptor("/", "io.jact.sample.HomePage", "home"));
+            }
+        };
+
+        RendererBridge rendererBridge = noOpRenderer();
+        AtomicBoolean cleanedUp = new AtomicBoolean();
+        AtomicReference<State<Integer>> state = new AtomicReference<>();
+
+        JactRuntime runtime = new JactRuntime(runtimeRegistry, rendererBridge);
+        runtime.start();
+        runtime.mountInitialPage("/", request -> {
+            State<Integer> value = Hooks.useState(0);
+            state.set(value);
+            Hooks.useEffect(() -> () -> cleanedUp.set(true));
+            return Nodes.text("value=" + value.get());
+        }, new WindowSettings("demo", 800, 600));
+
+        runtime.shutdown();
+        state.get().set(1);
+
+        assertThat(cleanedUp.get()).isTrue();
+        assertThat(state.get().get()).isZero();
+    }
+
+    @Test
+    void wrapsEffectFailures() {
+        RuntimeRegistry runtimeRegistry = new RuntimeRegistry() {
+            @Override
+            public List<ComponentDescriptor> components() {
+                return List.of();
+            }
+
+            @Override
+            public List<PageDescriptor> pages() {
+                return List.of(new PageDescriptor("/", "io.jact.sample.HomePage", "home"));
+            }
+        };
+
+        JactRuntime runtime = new JactRuntime(runtimeRegistry, noOpRenderer());
+        runtime.start();
+
+        assertThatThrownBy(() -> runtime.mountInitialPage("/", request -> {
+            Hooks.useEffect(() -> {
+                throw new IllegalStateException("boom");
+            });
+            return Nodes.text("ok");
+        }, new WindowSettings("demo", 800, 600)))
+            .isInstanceOf(JactRuntimeException.class)
+            .hasMessageContaining("JACT effect failed");
+    }
+
+    @Test
     void appliesStateUpdateScheduledFromEffectInSameRenderCycle() {
         RuntimeRegistry runtimeRegistry = new RuntimeRegistry() {
             @Override
@@ -451,5 +512,26 @@ class JactRuntimeTest {
                 .toList();
         }
         return List.of();
+    }
+
+    private RendererBridge noOpRenderer() {
+        return new RendererBridge() {
+            @Override
+            public void ensureStarted() {
+            }
+
+            @Override
+            public void mount(JNode rootNode, WindowSettings windowSettings) {
+            }
+
+            @Override
+            public void update(JNode rootNode) {
+            }
+
+            @Override
+            public void executeOnUiThread(Runnable task) {
+                task.run();
+            }
+        };
     }
 }
