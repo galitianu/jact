@@ -23,6 +23,9 @@ public class JactProperties {
     }
 
     public void setInitialPage(String initialPage) {
+        if (initialPage == null || initialPage.isBlank()) {
+            throw new IllegalArgumentException("jact.initial-page must not be blank");
+        }
         this.initialPage = initialPage;
     }
 
@@ -39,6 +42,9 @@ public class JactProperties {
     }
 
     public void setWindowWidth(int windowWidth) {
+        if (windowWidth <= 0) {
+            throw new IllegalArgumentException("jact.window-width must be greater than zero");
+        }
         this.windowWidth = windowWidth;
     }
 
@@ -47,6 +53,9 @@ public class JactProperties {
     }
 
     public void setWindowHeight(int windowHeight) {
+        if (windowHeight <= 0) {
+            throw new IllegalArgumentException("jact.window-height must be greater than zero");
+        }
         this.windowHeight = windowHeight;
     }
 }

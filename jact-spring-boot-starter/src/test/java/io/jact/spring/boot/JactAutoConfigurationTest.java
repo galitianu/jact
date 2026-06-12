@@ -4,7 +4,9 @@ import io.jact.annotations.JNode;
 import io.jact.core.api.Navigator;
 import io.jact.core.meta.ComponentDescriptor;
 import io.jact.core.meta.PageDescriptor;
+import io.jact.core.node.Nodes;
 import io.jact.core.node.TextNode;
+import io.jact.core.internal.JactRuntimeException;
 import io.jact.core.registry.RuntimeRegistry;
 import io.jact.core.runtime.JactRuntime;
 import io.jact.core.runtime.WindowSettings;
@@ -21,6 +23,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JactAutoConfigurationTest {
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
@@ -117,6 +120,86 @@ class JactAutoConfigurationTest {
             });
     }
 
+    @Test
+    void failsClearlyWhenEnabledWithoutPages() {
+        contextRunner
+            .withPropertyValues("jact.enabled=true")
+            .withBean(RendererBridge.class, JactAutoConfigurationTest::noOpRenderer)
+            .withBean(RuntimeRegistry.class, () -> new RuntimeRegistry() {
+                @Override
+                public List<ComponentDescriptor> components() {
+                    return List.of();
+                }
+
+                @Override
+                public List<PageDescriptor> pages() {
+                    return List.of();
+                }
+            })
+            .run(context -> {
+                ApplicationRunner runner = context.getBean(ApplicationRunner.class);
+                assertThatThrownBy(() -> runner.run(null))
+                    .isInstanceOf(JactRuntimeException.class)
+                    .hasMessageContaining("no @JactPage entries were discovered");
+            });
+    }
+
+    @Test
+    void invokesComponentsThroughSpringBeans() {
+        AtomicReference<JNode> mountedNode = new AtomicReference<>();
+
+        contextRunner
+            .withPropertyValues("jact.enabled=true")
+            .withUserConfiguration(ComponentInvocationTestConfig.class)
+            .withBean(RendererBridge.class, () -> recordingRenderer(mountedNode))
+            .withBean(RuntimeRegistry.class, () -> new RuntimeRegistry() {
+                @Override
+                public List<ComponentDescriptor> components() {
+                    return List.of(new ComponentDescriptor(ComponentBean.class.getName(), "header"));
+                }
+
+                @Override
+                public List<PageDescriptor> pages() {
+                    return List.of(new PageDescriptor("/", ComponentPageBean.class.getName(), "home"));
+                }
+            })
+            .run(context -> {
+                ApplicationRunner runner = context.getBean(ApplicationRunner.class);
+                try {
+                    runner.run(null);
+                } catch (Exception exception) {
+                    throw new RuntimeException(exception);
+                }
+
+                assertThat(mountedNode.get()).isEqualTo(new TextNode("Hello Component"));
+            });
+    }
+
+    @Test
+    void failsOnAmbiguousJactMethodOverloads() {
+        contextRunner
+            .withPropertyValues("jact.enabled=true")
+            .withUserConfiguration(AmbiguousPageConfig.class)
+            .withBean(RendererBridge.class, JactAutoConfigurationTest::noOpRenderer)
+            .withBean(RuntimeRegistry.class, () -> new RuntimeRegistry() {
+                @Override
+                public List<ComponentDescriptor> components() {
+                    return List.of();
+                }
+
+                @Override
+                public List<PageDescriptor> pages() {
+                    return List.of(new PageDescriptor("/", AmbiguousPageBean.class.getName(), "home"));
+                }
+            })
+            .run(context -> {
+                ApplicationRunner runner = context.getBean(ApplicationRunner.class);
+                assertThatThrownBy(() -> runner.run(null))
+                    .isInstanceOf(JactRuntimeException.class)
+                    .hasMessageContaining("Ambiguous JACT method overload");
+            });
+    }
+
     @Configuration(proxyBeanMethods = false)
     static class PageInvocationTestConfig {
         @Bean
@@ -138,5 +221,97 @@ class JactAutoConfigurationTest {
         public JNode home(MessageService messageService) {
             return new TextNode(messageService.message());
         }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class ComponentInvocationTestConfig {
+        @Bean
+        MessageService messageService() {
+            return () -> "Hello";
+        }
+
+        @Bean
+        ComponentPageBean componentPageBean() {
+            return new ComponentPageBean();
+        }
+
+        @Bean
+        ComponentBean componentBean() {
+            return new ComponentBean();
+        }
+    }
+
+    public static class ComponentPageBean {
+        public JNode home() {
+            return Nodes.component("header", "Component");
+        }
+    }
+
+    public static class ComponentBean {
+        public JNode header(MessageService messageService, String label) {
+            return new TextNode(messageService.message() + " " + label);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class AmbiguousPageConfig {
+        @Bean
+        AmbiguousPageBean ambiguousPageBean() {
+            return new AmbiguousPageBean();
+        }
+    }
+
+    public static class AmbiguousPageBean {
+        public JNode home() {
+            return new TextNode("one");
+        }
+
+        public JNode home(MessageService messageService) {
+            return new TextNode(messageService.message());
+        }
+    }
+
+    private static RendererBridge noOpRenderer() {
+        return new RendererBridge() {
+            @Override
+            public void ensureStarted() {
+            }
+
+            @Override
+            public void mount(JNode rootNode, WindowSettings windowSettings) {
+            }
+
+            @Override
+            public void update(JNode rootNode) {
+            }
+
+            @Override
+            public void executeOnUiThread(Runnable task) {
+                task.run();
+            }
+        };
+    }
+
+    private static RendererBridge recordingRenderer(AtomicReference<JNode> mountedNode) {
+        return new RendererBridge() {
+            @Override
+            public void ensureStarted() {
+            }
+
+            @Override
+            public void mount(JNode rootNode, WindowSettings windowSettings) {
+                mountedNode.set(rootNode);
+            }
+
+            @Override
+            public void update(JNode rootNode) {
+                mountedNode.set(rootNode);
+            }
+
+            @Override
+            public void executeOnUiThread(Runnable task) {
+                task.run();
+            }
+        };
     }
 }

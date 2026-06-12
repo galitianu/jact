@@ -61,10 +61,12 @@ public class JactAutoConfiguration {
     @ConditionalOnProperty(prefix = "jact", name = "enabled", havingValue = "true")
     public ApplicationRunner jactStartupRunner(
         JactRuntime runtime,
+        RuntimeRegistry runtimeRegistry,
         JactProperties properties,
         ApplicationContext applicationContext
     ) {
         return args -> {
+            validateRuntimeRegistry(runtimeRegistry);
             runtime.start();
             PageResolver pageResolver = request -> invokePage(applicationContext, request);
             runtime.mountInitialPage(
@@ -74,6 +76,15 @@ public class JactAutoConfiguration {
                 new WindowSettings(properties.getWindowTitle(), properties.getWindowWidth(), properties.getWindowHeight())
             );
         };
+    }
+
+    private void validateRuntimeRegistry(RuntimeRegistry runtimeRegistry) {
+        if (runtimeRegistry.pages().isEmpty()) {
+            throw new JactRuntimeException(
+                "JACT is enabled, but no @JactPage entries were discovered. "
+                    + "Ensure jact-compiler is configured as an annotation processor."
+            );
+        }
     }
 
     private JNode invokePage(ApplicationContext applicationContext, RenderRequest request) {
