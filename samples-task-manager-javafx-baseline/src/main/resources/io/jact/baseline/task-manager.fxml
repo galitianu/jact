@@ -5,35 +5,60 @@
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
-<HBox spacing="16" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="io.jact.baseline.TaskManagerController">
+<VBox fx:id="root" spacing="8" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="io.jact.baseline.TaskManagerController">
     <padding>
-        <Insets top="16" right="16" bottom="16" left="16"/>
+        <Insets top="0" right="0" bottom="0" left="0"/>
     </padding>
-    <VBox spacing="10" prefWidth="560">
-        <Label text="JavaFX MVC/FXML Task Manager Baseline"/>
-        <TextField fx:id="searchField" promptText="Search tasks by title"/>
-        <HBox spacing="8">
-            <ComboBox fx:id="filterBox"/>
-            <CheckBox fx:id="descendingBox" text="Latest first"/>
-        </HBox>
-        <HBox spacing="8">
-            <TextField fx:id="newTaskField" promptText="Task title"/>
-            <Button text="Create" onAction="#createTask"/>
-        </HBox>
-        <ListView fx:id="taskList" prefHeight="460"/>
+
+    <VBox fx:id="listPage" spacing="8">
+        <VBox spacing="4" styleClass="task-header">
+            <Label text="JACT Thesis Task Manager"/>
+            <Label text="Reactive Java desktop UI powered by Spring Boot services"/>
+        </VBox>
+
+        <Separator/>
+
+        <VBox spacing="8" styleClass="task-filters">
+            <Label text="Search and filters"/>
+            <TextField fx:id="searchField" promptText="Search tasks by title"/>
+            <HBox spacing="8">
+                <ComboBox fx:id="filterBox"/>
+                <CheckBox fx:id="descendingBox" text="Latest first"/>
+            </HBox>
+        </VBox>
+
+        <VBox spacing="8" styleClass="create-task">
+            <Label text="Create task"/>
+            <HBox spacing="8">
+                <TextField fx:id="newTaskField" promptText="Task title"/>
+                <Button text="Create" onAction="#createTask"/>
+            </HBox>
+        </VBox>
+
+        <Label fx:id="taskListTitle" text="Task list (0)"/>
+        <ScrollPane fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED" pannable="true" focusTraversable="false">
+            <content>
+                <VBox fx:id="taskListContainer" spacing="8"/>
+            </content>
+        </ScrollPane>
     </VBox>
-    <VBox fx:id="detailPane" spacing="10" prefWidth="320">
-        <Label fx:id="detailTitle" text="No task selected"/>
-        <TextField fx:id="editTitleField" promptText="Edit title"/>
+
+    <VBox fx:id="detailPage" spacing="8" styleClass="task-detail" visible="false" managed="false">
+        <Label text="Task details"/>
+        <Label fx:id="detailIdLabel" text="Task id:"/>
         <CheckBox fx:id="detailCompletedBox" text="Completed"/>
+        <TextField fx:id="editTitleField" promptText="Edit title"/>
         <HBox spacing="8">
-            <Button text="Save" onAction="#saveSelectedTask"/>
-            <Button text="Delete" onAction="#deleteSelectedTask"/>
+            <Button text="Save title" onAction="#saveSelectedTask"/>
+            <Button text="Delete task" onAction="#deleteSelectedTask"/>
+            <Button text="Back" onAction="#goBack"/>
         </HBox>
+        <Label fx:id="currentRouteLabel" text="Current route: /"/>
     </VBox>
-</HBox>
+</VBox>
