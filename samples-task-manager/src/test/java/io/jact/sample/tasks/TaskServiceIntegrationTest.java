@@ -17,13 +17,13 @@ class TaskServiceIntegrationTest {
 
     @Test
     void supportsCrudAndSearchFilterFlows() {
-        TaskView created = taskService.create("M3 integration test task");
+        TaskView created = taskService.create("Integration test task");
         assertThat(created.id()).isNotNull();
 
         List<TaskView> queryResults = taskService.list("integration", TaskFilter.ALL, false);
         assertThat(queryResults).extracting(TaskView::id).contains(created.id());
 
-        taskService.updateTitle(created.id(), "M3 updated task");
+        taskService.updateTitle(created.id(), "Updated task");
         List<TaskView> updatedResults = taskService.list("updated", TaskFilter.ALL, false);
         assertThat(updatedResults).extracting(TaskView::id).contains(created.id());
 

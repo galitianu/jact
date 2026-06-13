@@ -10,7 +10,7 @@ public class TaskManagerBaselineApplication extends Application {
     public void start(Stage stage) throws Exception {
         FXMLLoader loader = new FXMLLoader(TaskManagerBaselineApplication.class.getResource("/io/jact/baseline/task-manager.fxml"));
         loader.setControllerFactory(type -> new TaskManagerController(new InMemoryTaskService()));
-        stage.setTitle("JACT M3 Task Manager");
+        stage.setTitle("JACT Task Manager");
         stage.setScene(new Scene(loader.load(), 960, 640));
         stage.show();
     }

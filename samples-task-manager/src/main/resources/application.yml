@@ -12,6 +12,6 @@ spring:
 jact:
   enabled: true
   initial-page: "/"
-  window-title: "JACT M3 Task Manager"
+  window-title: "JACT Task Manager"
   window-width: 960
   window-height: 640

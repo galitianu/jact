@@ -22,7 +22,7 @@ public class TaskService {
     @PostConstruct
     void seedDefaults() {
         if (taskRepository.count() == 0) {
-            taskRepository.save(new TaskEntity("Prepare M3 validation notes"));
+            taskRepository.save(new TaskEntity("Prepare validation notes"));
             taskRepository.save(new TaskEntity("Review service-driven rerender flow"));
         }
     }
